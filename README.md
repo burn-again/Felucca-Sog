@@ -4,6 +4,13 @@
 
 This is **Felucca-Sog**, a fork of [Felucca](https://github.com/hugelton/Felucca) by Hügelton Instruments.
 
+What Felucca-Sog adds:
+
+- **COHERE** (КОГЕРЕНТ), the coherence engine: a stack of 2 to 5 detuned saws per voice that falls apart on every note
+  (the spread opens, samples hold, bits drop, short dropouts stutter), then a Kuramoto pull hauls the phases back into step
+  and lets go, and the drift apart is the chorus. EDIT: OSC SPRD HIT REC / PULL DRFT WEAR DROP; HOME: HIT REC PULL WEAR.
+  Settings saved by Felucca (or older Felucca-Sog) load as they were: the MIDI LEARN map moves to its new place.
+
 ## Maintenance Notice
 
 What began as a personal experiment grew far beyond my expectations. I’m grateful to everyone who contributed, supported the project, and made music with Felucca.

@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Shared PER4 layout: each feature updates only its own fields, preserving
  * the other feature's saved preferences when either is built independently.
- * PER1/PER2 are upstream; PER3 added bold; PER4 added favorites.
+ * PER1/PER2 are upstream; PER3 added bold; PER4 added favorites; PER5 (Felucca-Sog) a 17th row of them: the MIDI LEARN
+ * map moved from factory[14] to factory[16], so engine 14 (KOGERENT) has a row of favourites (a PER4 record is moved).
  * palette: UI_PAL_TAG + index; an old id (below 20, earlier firmware) is migrated on import.
  * bold: no longer used (one font weight); kept as it was saved, unless it holds the HOLD setting (panel.c).
  * zoom: no longer used (the large readout); kept as it was saved, unless it holds the LEDS setting (panel.c).
@@ -23,18 +24,34 @@ typedef struct {
     uint32_t magic, palette, lowcut, zoom;
     panel_t panel;
     uint32_t bold;
-    struct { uint8_t factory[16][32]; uint32_t user, filter; } favorites;
+    struct { uint8_t factory[17][32]; uint32_t user, filter; } favorites;
 } persist_t;
-#define PERSIST_MAGIC 0x50455234u
+#define PERSIST_MAGIC 0x50455235u
+#define PERSIST_PER4 0x50455234u
+#define PERSIST_PER4_SIZE (sizeof(persist_t) - 32u)   /* 16 rows of favourites */
+
+/* a PER4 record (16 rows: the MIDI LEARN map in row 14, then user, filter) laid out as PER5, in place */
+static void settings_from_per4(persist_t *p)
+{
+    uint32_t uf[2];
+    memcpy(uf, p->favorites.factory[16], sizeof uf);           /* PER4's user, filter: where PER5's row 16 starts */
+    memcpy(p->favorites.factory[16], p->favorites.factory[14], 32u);
+    memset(p->favorites.factory[14], 0, 32u);
+    p->favorites.user = uf[0];
+    p->favorites.filter = uf[1];
+    p->magic = PERSIST_MAGIC;
+}
 
 /* Normalize in place; 1 = current, 2 = migrated, 0 = invalid. */
 static int settings_import(persist_t *p, int n)
 {
     int current = n == (int)sizeof *p && p->magic == PERSIST_MAGIC;
+    int old4 = n == (int)PERSIST_PER4_SIZE && p->magic == PERSIST_PER4;
     int old3 = n == (int)(sizeof *p - sizeof p->favorites) && p->magic == 0x50455233u;
     int old2 = n == (int)(sizeof *p - sizeof p->favorites - sizeof p->bold) && p->magic == 0x50455232u;
     int old1 = n == (int)(8u + sizeof(panel_t)) && p->magic == 0x50455231u;
-    if (!(current || old3 || old2 || old1)) return 0;
+    if (!(current || old4 || old3 || old2 || old1)) return 0;
+    if (old4) settings_from_per4(p);
     if (old1) {
         panel_t old;
         memcpy(&old, (uint8_t *)p + 8, sizeof old);
@@ -42,7 +59,7 @@ static int settings_import(persist_t *p, int n)
         p->lowcut = p->zoom = 0;
     }
     if (old1 || old2) p->bold = 0;
-    if (!current) memset(&p->favorites, 0, sizeof p->favorites);
+    if (!current && !old4) memset(&p->favorites, 0, sizeof p->favorites);
     if (p->favorites.factory[15][29] > 1u)        /* STYLE (ui.c ui_style): 2, the retired PIXEL = LINE; unknown = FLAT */
         p->favorites.factory[15][29] = p->favorites.factory[15][29] == 2u ? 1u : 0u;
     {   /* CLICK, CLICK LEVEL, COUNT-IN (ui.c ui_rec_prefs): two bits each, 3 is no value: the default (0) */
