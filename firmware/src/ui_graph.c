@@ -457,19 +457,20 @@ static void graph_insert(const track_t *t, uint16_t c)
     uint32_t sh = ins_bits_sh(t->p[P_IA]);
     cv_rect(PANEL_X0, cy, PANEL_W, 1, T_RAISE);
     cv_line(PANEL_X0 + PANEL_W / 2, cy - a, PANEL_X0 + PANEL_W / 2, cy + a, T_RAISE);
-    if (ty == IT_OFF || ty >= IT_PHASER || !m)
+    if (ty == IT_OFF || ins_swept_type((uint32_t)ty) || !m)
         cv_line(PANEL_X0 + PANEL_W / 6, cy + a, PANEL_X0 + PANEL_W * 5 / 6, cy - a, ty ? T_RAISE : T_DIM);
     if (ty == IT_OFF)
         return;
     for (x = 0; x < PANEL_W; x++) {
         int32_t y, w;
-        if (ty >= IT_PHASER) {                       /* the sweep, two cycles */
+        if (ins_swept_type((uint32_t)ty)) {          /* the sweep, two cycles */
             uint32_t ph = (uint32_t)x * (0xFFFFFFFFu / (PANEL_W / 2u)), tr = pf_tri(ph);
             w = ty == IT_CHORUS ? osc_sine(ph) * 2 : ty == IT_FLANGER ? (int32_t)((tr * tr) >> 16) * 2 - 65536 : (int32_t)tr * 2 - 65536;
             y = cy - (w >> 1) * a / 32768 * t->p[P_IB] / 127;
         } else {                                     /* the curve: v in, dry v, wet shaped */
             int32_t v = (x - PANEL_W / 2) * 49152 / (PANEL_W / 2), o;
-            o = ty == IT_CRUSH ? ins_shape(IT_CRUSH, v, sh) : (ins_shape((uint32_t)ty, ((v >> 3) * g) >> 9, 0) * lvl) >> 12;
+            o = ty == IT_CRUSH ? ins_shape(IT_CRUSH, v, sh)
+                               : (ins_shape((uint32_t)ty, ((v >> 3) * g) >> 9, ty == IT_CHEB ? (uint32_t)t->p[P_IB] : 0) * lvl) >> 12;
             w = v + mulq16(o - v, (uint32_t)m << 1);
             y = cy - clamp(w, -49152, 49152) * a / 49152;
         }

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: MIT
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Felucca-Sog: a copy of Felucca-Engines' eng_analog.c (MIT, LICENSES/MIT-Felucca-Engines.txt; the submodule's stays as
- * upstream has it), changed here: filter TYPE 3, POLV (a Polivoks-style filter), the power-on default (params.c). */
+ * upstream has it), changed here: filter TYPE 3, POLV (a Polivoks-style filter; DRV drives into it), the power-on default (params.c). */
 /* ANALOG: two band-limited oscillators (saw / square / tri / sine / PWM),
  * noise, drive and a trapezoidal state-variable filter: low-pass, or (1.5, TYPE) band-pass / high-pass.
  * WAVE SYNC and SUB (#104, appended: WAVE 0..4 play as they always did) are two more oscillator pairs (analog_osc_x):
@@ -24,12 +24,19 @@ static const param_desc_t ANALOG_SUB = {"SUB", F_PCT, 0, 127, 64, 0, 0};      /*
  * 3 POLV (Felucca-Sog): the Polivoks's character, a 12 dB/oct low-pass whose integrators are op-amps that saturate (not
  * OTAs): both integrator states go through a soft clip (analog_sat: tanh, +-1.5x a voice's full scale), and its damping
  * goes lower (ANALOG_KP: down to ~0.05), so high RES screams and bites into the sound and limits itself instead of
- * growing; low RES it is close to LP, a little thicker when driven */
+ * growing. The integrators saturate near a voice's full scale (analog_sat), so a full oscillator already bites; DRV (with
+ * POLV) is the gain into the filter, 1x .. 6x (ANALOG_PG), instead of the soft clip before it: the more DRV, the grittier */
 #define AF_POLV 3u
-static inline int32_t analog_sat(int32_t x)                    /* ~49152 tanh(x / 49152): softclip of x 2/3, x 3/2 */
+static inline int32_t analog_sat(int32_t x)                    /* ~24576 tanh(x / 24576): softclip of x 4/3, x 3/4 */
 {
-    x = clamp(x, -1048575, 1048575);
-    return (softclip(x - (x >> 2) - (x >> 4) - (x >> 6)) * 3) >> 1;   /* (x 0.672: shifts, no divide) */
+    x = clamp(x, -786431, 786431);
+    return (softclip(x + (x >> 2) + (x >> 4) + (x >> 6)) * 3) >> 2;   /* (x 1.33: shifts, no divide) */
+}
+#define ANALOG_PG(drv) (32768 + (drv) * 1290)          /* POLV's input gain, Q15: 1x .. 6x */
+/* the filter's input: s / 2, with POLV x its DRV gain pg (Q15; (s / 8) (pg / 4): 32 bits) */
+static inline int32_t analog_fin(int32_t s, uint32_t ft, int32_t pg)
+{
+    return ft == AF_POLV ? (((s >> 3) * (pg >> 2)) >> 10) : s >> 1;
 }
 static inline int32_t analog_tap(const tsvf_t *c, int32_t k, int32_t in, int32_t *ic1, int32_t *ic2, uint32_t ft)
 {
@@ -101,7 +108,7 @@ static __attribute__((noinline)) void analog_render_x(track_t *t, voice_t *v, in
             inc2 += (uint32_t)((int32_t)(inc2 >> 12) * m->fine);
     }
     uint32_t ft = (uint32_t)p[P_FTYPE];
-    int32_t fk = ANALOG_K(p[P_E5]);
+    int32_t fk = ANALOG_K(p[P_E5]), pg = ANALOG_PG(drv);
     analog_coef(&flt, cut, p[P_E5], ft);
     for (i = 0; i < n; i++) {
         int32_t a = osc_saw(ph0, inc1), b, s;
@@ -128,9 +135,9 @@ static __attribute__((noinline)) void analog_render_x(track_t *t, voice_t *v, in
         s = mulq15(a, m1) + mulq15(b, m2);
         if (nz)
             s += mulq15((int32_t)(noise32(&nst) >> 17) - 16384, nz);
-        if (drv)
+        if (drv && ft != AF_POLV)
             s = softclip(((s >> 2) * (drive >> 2)) >> 11);
-        s = soft_knee(analog_tap(&flt, fk, s >> 1, &ic1, &ic2, ft), 16000) << 1;
+        s = soft_knee(analog_tap(&flt, fk, analog_fin(s, ft, pg), &ic1, &ic2, ft), 16000) << 1;
         out[i] += voice_amp(s, m, i) << 1;
     }
     v->ph[0] = ph0;
@@ -159,7 +166,7 @@ static inline __attribute__((always_inline)) void analog_osc(track_t *t, voice_t
     int32_t nz = noise * 200, drv = p[P_E6];
     uint32_t ph0 = v->ph[0], ph1 = v->ph[1];                  /* state in locals: out[] may alias v->s[] */
     int32_t ic1 = v->s[0], ic2 = v->s[1], nst = v->s[2];
-    int32_t fk = ft ? ANALOG_K(p[P_E5]) : 0;
+    int32_t fk = ft ? ANALOG_K(p[P_E5]) : 0, pg = ANALOG_PG(drv);
     analog_coef(&flt, cut, p[P_E5], ft);
     for (i = 0; i < n; i++) {
         int32_t a, b, s;
@@ -190,11 +197,11 @@ static inline __attribute__((always_inline)) void analog_osc(track_t *t, voice_t
         s = mulq15(a, m1) + mulq15(b, m2);
         if (nz)
             s += mulq15((int32_t)(noise32(&nst) >> 17) - 16384, nz);
-        if (drv)
+        if (drv && ft != AF_POLV)
             s = softclip(((s >> 2) * (drive >> 2)) >> 11);   /* pre-shifts: drive is up to 3x, no overflow */
         {   /* filter, linear up to half scale, then a soft knee (only resonance peaks saturate); soft_knee()
              * written out: the host compiler makes this loop 1 % slower with the call */
-            int32_t y = ft ? analog_tap(&flt, fk, s >> 1, &ic1, &ic2, ft) : tsvf_lp(&flt, s >> 1, &ic1, &ic2);
+            int32_t y = ft ? analog_tap(&flt, fk, analog_fin(s, ft, pg), &ic1, &ic2, ft) : tsvf_lp(&flt, s >> 1, &ic1, &ic2);
             int32_t a = y < 0 ? -y : y;
             if (a > 16000) {
                 a = 16000 + (softclip((a - 16000) * 2) >> 1);

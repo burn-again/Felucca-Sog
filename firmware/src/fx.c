@@ -91,28 +91,28 @@ static struct {                          /* HALL's state (in the pool: no .bss) 
 
 /* DIST (Felucca-Sog: Chebyshev): low cut -> drive (1x..9x) -> a soft limit into [-1, 1] (tanh: the Chebyshev
  * polynomials are bounded only there) -> u + a2 2u^2 + a3 T3(u) + a5 T5(u): T3 and T5 put the 3rd and 5th
- * harmonic of a full-scale sine exactly, growing with DST (a3 0 .. 0.55, a5 0 .. 0.3, squared), 2u^2 a fixed
+ * harmonic of a full-scale sine exactly, growing with DST (a3 0 .. 0.8 by DST 64, a5 0 .. 0.5, squared), 2u^2 a fixed
  * touch of the 2nd (warmth, as the old bias gave), scaled by 1 / (1 + 2 a2 + a3 + a5) so it never passes full
  * scale -> DC blocker (~14 Hz: 2u^2 is lopsided; silence stays 0) -> tone low-pass that closes with drive ->
  * make-up. T_n by the recurrence T(n+1) = 2u T(n) - T(n-1), Q15 (u T <= 2^30: 32 bits). State per part
  * (track_t dist_*). */
 static int32_t dist_dc[NTRK];                           /* its DC blocker, per track (Q8; track_t has no room: 16 B steps) */
-static void track_dist(track_t *t, int32_t *b, uint32_t n)
+static __attribute__((noinline)) void track_dist(track_t *t, int32_t *b, uint32_t n)   /* (its own loop: mix_part's stays) */
 {
     int32_t d = t->p[P_DIST], i, g, k, mk, a2 = 2600, a3, a5, nrm, *dc = &dist_dc[(uint32_t)(t - trk) % NTRK];
     if (!d)
         return;                                         /* states kept: switching on does not click */
-    g = 4096 + d * d * 2;                                /* Q12: 1x .. ~9x, gentle at first */
+    g = 4096 + d * d * 4 + d * 64;                       /* Q12: 1x .. ~19x, sooner than a square law alone */
     k = 32000 - d * 95;                                  /* tone: transparent at low drive .. ~3 kHz, Q15 */
     mk = 30000 - d * 120;                                /* make-up */
-    a3 = d * 142;                                        /* Q15: 0 .. 0.55 */
-    a5 = (d * d * 61) >> 7;                              /* Q15: 0 .. 0.3, late */
+    a3 = d < 64 ? d * 410 : 26240;                       /* Q15: 0 .. 0.8 by DST 64 */
+    a5 = (d * d * 130) >> 7;                             /* Q15: 0 .. 0.5, late */
     nrm = (int32_t)(((uint32_t)32768 << 15) / (uint32_t)(32768 + 2 * a2 + a3 + a5));   /* Q15, once a block */
     for (i = 0; i < (int32_t)n; i++) {
         int32_t x = b[i], y, u, t2, t3, t4, t5;
         t->dist_hp += (x - t->dist_hp + 64) >> 7;           /* ~55 Hz low cut: keep the bass out of the clipper */
-        x = clamp(x - t->dist_hp, -230000, 230000);         /* (x >> 2) * g fits 32 bits */
-        u = softclip(((x >> 2) * g) >> 10);                 /* >> 2 first: no overflow for loud poly; |u| <= 32767 */
+        x = clamp(x - t->dist_hp, -230000, 230000);         /* (x >> 4) * g fits 32 bits */
+        u = softclip(((x >> 4) * g) >> 8);                  /* >> 4 first: no overflow for loud poly; |u| <= 32767 */
         t2 = ((u * u) >> 14) - 32768;                       /* T2 = 2u^2 - 1 */
         t3 = ((u * t2) >> 14) - u;
         t4 = ((u * t3) >> 14) - t2;
@@ -638,6 +638,11 @@ static __attribute__((noinline)) void rev_side_mix(int32_t *l, int32_t *r, uint3
  *                        aliasing as the old samplers), LPF (two one-pole low-passes at F_CUTOFF after them, #177);
  *   PHASR                RATE (F_LFOHZ), DEPTH (the sweep around ~850 Hz: 0 still .. the whole 150 Hz .. 4.8 kHz),
  *                        FDBK (0 .. 0.7): the FX layer's four all-pass stages (perform.c PH_A), mono, per track;
+ *   CHEB (Felucca-Sog)   DRIVE, ORDER, LEVEL: the drive into a soft limit u in [-1, 1], then the Chebyshev polynomial
+ *                        T_n(u) - T_n(0), which turns a full-scale sine into its n-th harmonic alone; ORDER sweeps
+ *                        n from 2 to 7, crossfading between neighbours (ins_cheb); MIX brings the fundamental back.
+ *                        Even orders halved (T_n - T_n(0) spans 2); the drives' DC blocker after (the even ones are
+ *                        lopsided). Silence stays 0. On a firmware without it, a stored CHEB plays as CHOR;
  *   FLANG CHOR           RATE, DEPTH, FDBK: a 256-sample line per track (5.8 ms); FLANG swept 0.25 .. 5 ms (the FX
  *                        layer's squared triangle), feedback 0 .. 0.85; CHOR a sine around 3.2 ms (+-2.3 ms at DEPTH
  *                        127), feedback 0 .. 0.4. A DC blocker on the swept copy (a clipped loud input is lopsided).
@@ -650,7 +655,8 @@ static __attribute__((noinline)) void rev_side_mix(int32_t *l, int32_t *r, uint3
  * recordings) comes after, so its edges stay sharp (no flanger feedback or phaser ringing smears them) and a STUT
  * repeats the processed sound. State in the pool, per track (ins[], 580 B each); noinline, its own loops: the audio
  * ISR's inlined path gains one test per part (track_t ins_run) */
-enum { IT_OFF, IT_SOFT, IT_HARD, IT_FOLD, IT_FUZZ, IT_CRUSH, IT_PHASER, IT_FLANGER, IT_CHORUS, IT_N };
+enum { IT_OFF, IT_SOFT, IT_HARD, IT_FOLD, IT_FUZZ, IT_CRUSH, IT_PHASER, IT_FLANGER, IT_CHORUS, IT_CHEB, IT_N };
+static inline int ins_swept_type(uint32_t ty) { return ty >= IT_PHASER && ty <= IT_CHORUS; }   /* PHASR FLANG CHOR */
 #define IL_LEN 256u                     /* FLANG / CHOR: the line, samples (a power of 2: masked) */
 static const uint8_t INS_HOLD[16] = {64, 48, 40, 32, 24, 20, 16, 12, 10, 8, 6, 5, 4, 3, 2, 1};   /* CRUSH RATE */
 typedef struct {
@@ -672,11 +678,29 @@ static int32_t ins_lpk(int32_t c)
     uint32_t g = SVF_G[clamp(c, 0, 127)];
     return (int32_t)((g << 16) / (4096u + g));
 }
+/* CHEB: T_n(u) - T_n(0) of u = softclip(v), n from ORDER o, Q15; even n halved. ORDER's six names split 0..127 evenly
+ * (params.c N_IORD): each order is pure at the middle of its names' span, crossfaded to the next between */
+static __attribute__((noinline)) int32_t ins_cheb(int32_t v, uint32_t o)   /* (out of line: the drives' loop keeps its shape inlined) */
+{
+    int32_t u = softclip(v), t[8], r, i, w;
+    uint32_t q = (uint32_t)clamp(clamp((int32_t)o, 0, 127) * 12 - 128, 0, 5 * 256), n = 2u + (q >> 8);   /* n 2..7 */
+    t[0] = 32767;
+    t[1] = u;
+    for (i = 2; i <= 7; i++)
+        t[i] = ((u * t[i - 1]) >> 14) - t[i - 2];       /* T(i) = 2u T(i-1) - T(i-2) (u t <= 2^30) */
+    for (i = 2; i <= 7; i += 2)
+        t[i] = (t[i] - (i & 2 ? -32767 : 32767)) >> 1;  /* even: less T(0) (-1 for 2, 6; +1 for 4), halved */
+    w = (int32_t)(q & 255u);
+    r = n < 7u ? t[n] + (((t[n + 1u] - t[n]) * w) >> 8) : t[7];
+    return r;
+}
 /* the drives' and CRUSH's shape of v (a voice's full scale 32768; v already through DRIVE): the curve the INSERT
- * graph draws too */
-static inline int32_t ins_shape(uint32_t ty, int32_t v, uint32_t sh)
+ * graph draws too (sh: CRUSH 16 - BITS, CHEB its ORDER) */
+static inline __attribute__((always_inline)) int32_t ins_shape(uint32_t ty, int32_t v, uint32_t sh)
 {
     switch (ty) {
+    case IT_CHEB:
+        return ins_cheb(v, sh);
     case IT_SOFT:
         return softclip(v);
     case IT_HARD:
@@ -696,13 +720,15 @@ static inline int32_t ins_shape(uint32_t ty, int32_t v, uint32_t sh)
 }
 static inline uint32_t ins_bits_sh(int32_t a) { return 15u - (uint32_t)(clamp(a, 0, 127) >> 3); }   /* BITS 1..16 */
 
-/* SOFT .. FUZZ: low cut -> DRIVE -> shape -> TONE -> LEVEL -> DC blocker; CRUSH: held sample -> bits -> LPF */
+/* SOFT .. FUZZ, CHEB: low cut -> DRIVE -> shape -> TONE (CHEB: open) -> LEVEL -> DC blocker; CRUSH: held sample ->
+ * bits -> LPF */
 static __attribute__((noinline)) void ins_drive(ins_t *s, const track_t *t, int32_t *b, uint32_t n, int32_t tw)
 {
-    uint32_t i, ty = s->type, crush = ty == IT_CRUSH, sh = ins_bits_sh(t->p[P_IA]);
+    uint32_t i, ty = s->type, crush = ty == IT_CRUSH, cheb = ty == IT_CHEB;
+    uint32_t sh = cheb ? (uint32_t)clamp(t->p[P_IB], 0, 127) : ins_bits_sh(t->p[P_IA]);
     uint32_t hold = INS_HOLD[clamp(t->p[P_IB], 0, 127) >> 3];
     int32_t a = t->p[P_IA], g = 4096 + a * a * 3;       /* DRIVE, Q12: 1x .. 12.8x, gentle at first */
-    int32_t k = ins_lpk(crush ? t->p[P_IC] : t->p[P_IB]), lvl = crush ? 4096 : LEVEL_Q12[t->p[P_IC] & 127];
+    int32_t k = ins_lpk(crush ? t->p[P_IC] : cheb ? 127 : t->p[P_IB]), lvl = crush ? 4096 : LEVEL_Q12[t->p[P_IC] & 127];
     for (i = 0; i < n; i++) {
         int32_t x = b[i], y, v;
         s->w += clamp(tw - s->w, -SL_SLOPE, SL_SLOPE);
@@ -716,7 +742,7 @@ static __attribute__((noinline)) void ins_drive(ins_t *s, const track_t *t, int3
         } else {
             s->hp += ((x << 8) - s->hp) >> 8;            /* ~27 Hz low cut (Q8: no offset left by the rounding) */
             v = clamp(x - (s->hp >> 8), -230000, 230000);
-            y = ins_shape(ty, ((v >> 3) * g) >> 9, 0);    /* (>> 3 first: 32 bits) */
+            y = ins_shape(ty, ((v >> 3) * g) >> 9, sh);   /* (>> 3 first: 32 bits) */
         }
         y <<= 4;                                        /* (x16: the low cutoffs' rounding leaves no offset) */
         v = mulq16(y - s->lp1, (uint32_t)k);             /* TONE / LPF: two one-pole low-passes */
@@ -811,7 +837,7 @@ static __attribute__((noinline)) void track_insert(track_t *t, int32_t *b, uint3
         memset(s, 0, sizeof *s);                        /* starting: no stale line or filter */
         s->type = (uint8_t)ty;
     }
-    if (s->type >= IT_PHASER)
+    if (ins_swept_type(s->type))
         ins_swept(s, t, b, n, tw);
     else
         ins_drive(s, t, b, n, tw);

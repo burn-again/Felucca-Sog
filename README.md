@@ -13,7 +13,9 @@ What Felucca-Sog adds:
 - **POLV**, a Polivoks-style filter for ANALOG (EDIT > FILTER > TYPE), the default on power-on and for new sounds:
   saturating integrators, so high RES screams and bites instead of ringing clean. Saved projects keep their filter.
 - **DIST is Chebyshev**: turning DST up adds the 3rd and 5th harmonics in their exact orders (and a touch of the 2nd)
-  instead of a generic soft clip.
+  instead of a generic soft clip. With POLV, ANALOG's **DRV** drives into the filter itself: more DRV, more grit.
+- **CHEB**, an INSERT type: DRIVE, ORDER (which harmonic: 2nd .. 7th, swept smoothly), LEVEL; MIX brings the
+  fundamental back.
 
 ## Maintenance Notice
 
