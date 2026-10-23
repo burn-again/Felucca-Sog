@@ -2,6 +2,8 @@
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 
+This is **Felucca-Sog**, a fork of [Felucca](https://github.com/hugelton/Felucca) by Hügelton Instruments.
+
 ## Maintenance Notice
 
 What began as a personal experiment grew far beyond my expectations. I’m grateful to everyone who contributed, supported the project, and made music with Felucca.
