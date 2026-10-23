@@ -1,0 +1,80 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Build and test Felucca-Sog (BUILDING.md) on every push to main, pull request and manual run; the package
+# (build/*.fwsc) is kept as a workflow artifact. On main the site goes to GitHub Pages: the installer and
+# the editor (web/make_site.py) and the browser emulator (build/emu) at webapp/try/.
+name: site
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - name: Python packages (the UI font and icons are rasterised at build time)
+        run: pip install Pillow fonttools
+
+      - name: JieLi toolchain (~/.jieli/toolchain)
+        run: tools/get_toolchain.sh
+      - name: JieLi AC79 SDK (~/fw-AC79_AIoT_SDK)
+        run: |
+          git clone --depth 1 --branch AC79NN_SDK_V1.2.1_2023-12-13 \
+              https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git ~/fw-AC79_AIoT_SDK
+
+      - uses: mymindstorm/setup-emsdk@v16
+        with:
+          version: 6.0.13
+
+      - name: Build
+        run: ./build.sh
+      - name: Test
+        run: tests/run_tests.sh
+      - uses: actions/upload-artifact@v7
+        with:
+          name: felucca-sog-${{ github.sha }}
+          path: build/*.fwsc
+          if-no-files-found: error
+      - name: Browser emulator
+        run: web/emu/build.sh
+
+      - name: Site
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: |
+          VERSION=$(sed -n 's/^#define FELUCCA_VERSION "\([^"]*\)".*/\1/p' firmware/src/felucca.c | head -n 1)
+          python3 web/make_site.py build/felucca.fwsc "$VERSION" _site
+          mkdir -p _site/webapp/try
+          cp -R build/emu/. _site/webapp/try/
+      - uses: actions/upload-pages-artifact@v5
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        with:
+          path: _site
+
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
