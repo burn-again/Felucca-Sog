@@ -3,7 +3,7 @@
 #define FELUCCA_FAVORITES 1
 /* Stable engine/preset references; fixed capacity independent of optional engines. */
 typedef struct {
-    uint8_t factory[16][32]; /* engine 0..15, preset 0..255 */
+    uint8_t factory[17][32]; /* engine 0..14, preset 0..255; [15] the UI's settings, [16] MIDI LEARN (PER5) */
     uint32_t user, filter;
 } favorites_t;
 static favorites_t favorites __attribute__((section(".pool")));

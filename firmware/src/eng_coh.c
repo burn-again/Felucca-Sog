@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Felucca-Sog contributors */
-/* KOGERENT (coherence): a stack of 2..5 detuned band-limited saws per voice that falls apart on every note and
+/* KOGERENT (coherence; on the device COHERE: the PRESETS screen has room for six capitals): a stack of 2..5 detuned band-limited saws per voice that falls apart on every note and
  * pulls itself back into step. A note (or a retrigger) knocks the voice's coherence down by HIT; it recovers towards
  * 1 with REC as the time constant (each voice of the part a little faster or slower: the chord re-forms unevenly).
  * While it is low, the stack's spread opens from the locked spread to SPRD, and WEAR holds samples (decimation) and
@@ -15,7 +15,6 @@
  * State: per voice a coh_v_t in the part's engine memory (engines.c eng_mem). v->s[0] is 1 once the voice has sounded
  * (kept on a retrigger: .keep), so a retrigger only collapses the stack and a new voice also scatters its phases. */
 #define COH_NOSC 5
-static const char *const N_COH_NOSC_UNIT = "osc";
 
 typedef struct {
     uint32_t ph[COH_NOSC];       /* the saws' phases */
@@ -256,10 +255,10 @@ static const preset_t COH_PRESETS[] = {
 };
 
 static const engine_t ENG_KOGERENT = {
-    .name = "KOGERENT",
+    .name = "COHERE",
     .page_title = {"COH", "WEAR"},
     .edit = {
-        {"OSC", F_INT, 2, COH_NOSC, 4, 0, N_COH_NOSC_UNIT},
+        {"OSC", F_INT, 2, COH_NOSC, 4, 0, "osc"},
         {"SPRD", F_PCT, 0, 127, 58, 0, 0},     /* the loose spread: 10 .. 160 cents */
         {"HIT", F_PCT, 0, 127, 117, 0, 0},     /* how far a note knocks the coherence down */
         {"REC", F_TIME, 0, 127, 93, 0, 0},     /* recovery (the time constant x 3) */

@@ -195,20 +195,37 @@ int main(void)
         uint32_t i;
         p = original; p.magic = 0x50455233u;
         assert(settings_import(&p, sizeof p - sizeof p.favorites) == 2);
-        for (i = 0; i < 32u; i++) assert(favorites.factory[14][i] == 0u);
+        for (i = 0; i < 32u; i++) assert(favorites.factory[16][i] == 0u);
         p = original;
-        for (i = 0; i < 32u; i++) p.favorites.factory[14][i] = (uint8_t)(i * 29u + 3u);
+        for (i = 0; i < 32u; i++) p.favorites.factory[16][i] = (uint8_t)(i * 29u + 3u);
         assert(settings_import(&p, sizeof p) == 1);
-        for (i = 0; i < 32u; i++) assert(favorites.factory[14][i] == (uint8_t)(i * 29u + 3u));
+        for (i = 0; i < 32u; i++) assert(favorites.factory[16][i] == (uint8_t)(i * 29u + 3u));
         assert(!memcmp(favorites.factory[13], original.favorites.factory[13], 32) &&
                !memcmp(favorites.factory[15], original.favorites.factory[15], 32));
         memset(&q, 0, sizeof q); settings_export(&q); assert(!memcmp(&q.favorites, &p.favorites, sizeof q.favorites));
         assert(settings_import(&q, sizeof q) == 1 && settings_import(&q, sizeof q) == 1);
-        for (i = 0; i < 32u; i++) assert(favorites.factory[14][i] == (uint8_t)(i * 29u + 3u));
+        for (i = 0; i < 32u; i++) assert(favorites.factory[16][i] == (uint8_t)(i * 29u + 3u));
+        {   /* PER4 (Felucca, 16 rows: the map in row 14, then user, filter): moved to row 16, row 14 (KOGERENT's
+             * favourites) empty, the rest as saved; then current */
+            uint8_t raw[sizeof(persist_t)];
+            uint32_t uf[2] = {1u << 31, 1u};
+            memcpy(raw, &original, sizeof original);
+            ((persist_t *)raw)->magic = 0x50455234u;
+            for (i = 0; i < 32u; i++) ((persist_t *)raw)->favorites.factory[14][i] = (uint8_t)(i * 7u + 1u);
+            memcpy(((persist_t *)raw)->favorites.factory[16], uf, sizeof uf);   /* where PER4 kept user, filter */
+            assert(sizeof(persist_t) - 32u == PERSIST_PER4_SIZE);
+            assert(settings_import((persist_t *)raw, (int)PERSIST_PER4_SIZE) == 2);
+            for (i = 0; i < 32u; i++)
+                assert(favorites.factory[16][i] == (uint8_t)(i * 7u + 1u) && favorites.factory[14][i] == 0u);
+            assert(favorites.user == (1u << 31) && favorites.filter == 1u && favorite_has(8, 0) &&
+                   ((persist_t *)raw)->magic == PERSIST_MAGIC);
+            assert(settings_import((persist_t *)raw, sizeof(persist_t)) == 1);
+            assert(settings_import((persist_t *)raw, (int)PERSIST_PER4_SIZE) == 0);   /* a PER5 record cut short: none */
+        }
         p = original; assert(settings_import(&p, sizeof p) == 1);
     }
 #endif
     assert(settings_import(&p, 3) == 0 && settings_import(&p, -1) == 0);
     assert(settings_import(&p, sizeof p - 1) == 0);
-    puts("Settings: PER1/PER2/PER3 migration, palette ids, calibration, HOLD, LEDS, CLICK / COUNT-IN, the FX key map, MIDI LEARN's map and independent feature preservation passed.");
+    puts("Settings: PER1/PER2/PER3/PER4 migration, palette ids, calibration, HOLD, LEDS, CLICK / COUNT-IN, the FX key map, MIDI LEARN's map and independent feature preservation passed.");
 }
