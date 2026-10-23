@@ -51,6 +51,7 @@ All by Hügelton Instruments (Leo Kuroshita), in this tree:
 | The controls picture | GPL-3.0-only | `docs/controls.jpg` |
 | The Fukiai icon font (<https://github.com/hugelton/Fukiai>): the firmware's icons (rasterised at build time by `tools/gen_aa_icons.py`) and the web editor's | MIT | `web/fukiai.ttf`, `LICENSES/MIT-Fukiai.txt`, `web/FUKIAI-LICENSE.txt` |
 | The ANALOG, LOFI, TRIO, WHEEL and NOISE engines, the engine interface and the shared DSP helpers: Felucca-Engines (<https://github.com/hugelton/Felucca-Engines>) | MIT | `firmware/engines/`, `LICENSES/MIT-Felucca-Engines.txt` |
+| ANALOG as Felucca-Sog builds it (Felucca-Engines' `eng_analog.c` with the POLV filter added) | MIT | `firmware/src/eng_analog.c`, `LICENSES/MIT-Felucca-Engines.txt` |
 
 ## Third-party material
 

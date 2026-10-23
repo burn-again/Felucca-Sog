@@ -10,6 +10,10 @@ What Felucca-Sog adds:
   (the spread opens, samples hold, bits drop, short dropouts stutter), then a Kuramoto pull hauls the phases back into step
   and lets go, and the drift apart is the chorus. EDIT: OSC SPRD HIT REC / PULL DRFT WEAR DROP; HOME: HIT REC PULL WEAR.
   Settings saved by Felucca (or older Felucca-Sog) load as they were: the MIDI LEARN map moves to its new place.
+- **POLV**, a Polivoks-style filter for ANALOG (EDIT > FILTER > TYPE), the default on power-on and for new sounds:
+  saturating integrators, so high RES screams and bites instead of ringing clean. Saved projects keep their filter.
+- **DIST is Chebyshev**: turning DST up adds the 3rd and 5th harmonics in their exact orders (and a touch of the 2nd)
+  instead of a generic soft clip.
 
 ## Maintenance Notice
 

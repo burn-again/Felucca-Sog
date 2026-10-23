@@ -89,24 +89,38 @@ static struct {                          /* HALL's state (in the pool: no .bss) 
 } hl __attribute__((section(".pool")));
 #define rev_side (hl.sd)
 
-/* DIST: low cut -> drive (1x..8x, exponential) -> asymmetric soft clip
- * (a little bias = even harmonics) -> tone low-pass that closes with drive ->
- * make-up gain (straight into tanh over the full band, it would sound like a
- * broken digital fuzz). State per part (track_t dist_*). */
+/* DIST (Felucca-Sog: Chebyshev): low cut -> drive (1x..9x) -> a soft limit into [-1, 1] (tanh: the Chebyshev
+ * polynomials are bounded only there) -> u + a2 2u^2 + a3 T3(u) + a5 T5(u): T3 and T5 put the 3rd and 5th
+ * harmonic of a full-scale sine exactly, growing with DST (a3 0 .. 0.55, a5 0 .. 0.3, squared), 2u^2 a fixed
+ * touch of the 2nd (warmth, as the old bias gave), scaled by 1 / (1 + 2 a2 + a3 + a5) so it never passes full
+ * scale -> DC blocker (~14 Hz: 2u^2 is lopsided; silence stays 0) -> tone low-pass that closes with drive ->
+ * make-up. T_n by the recurrence T(n+1) = 2u T(n) - T(n-1), Q15 (u T <= 2^30: 32 bits). State per part
+ * (track_t dist_*). */
+static int32_t dist_dc[NTRK];                           /* its DC blocker, per track (Q8; track_t has no room: 16 B steps) */
 static void track_dist(track_t *t, int32_t *b, uint32_t n)
 {
-    int32_t d = t->p[P_DIST], i, g, k, mk, bias = 2400, b0;
+    int32_t d = t->p[P_DIST], i, g, k, mk, a2 = 2600, a3, a5, nrm, *dc = &dist_dc[(uint32_t)(t - trk) % NTRK];
     if (!d)
         return;                                         /* states kept: switching on does not click */
     g = 4096 + d * d * 2;                                /* Q12: 1x .. ~9x, gentle at first */
     k = 32000 - d * 95;                                  /* tone: transparent at low drive .. ~3 kHz, Q15 */
     mk = 30000 - d * 120;                                /* make-up */
-    b0 = softclip(bias);
+    a3 = d * 142;                                        /* Q15: 0 .. 0.55 */
+    a5 = (d * d * 61) >> 7;                              /* Q15: 0 .. 0.3, late */
+    nrm = (int32_t)(((uint32_t)32768 << 15) / (uint32_t)(32768 + 2 * a2 + a3 + a5));   /* Q15, once a block */
     for (i = 0; i < (int32_t)n; i++) {
-        int32_t x = b[i], y;
+        int32_t x = b[i], y, u, t2, t3, t4, t5;
         t->dist_hp += (x - t->dist_hp + 64) >> 7;           /* ~55 Hz low cut: keep the bass out of the clipper */
-        x = clamp(x - t->dist_hp, -230000, 230000);         /* (x >> 2) * g fits 32 bits; the clip is flat out there */
-        y = softclip((((x >> 2) * g) >> 10) + bias) - b0;   /* >> 2 first: no overflow for loud poly */
+        x = clamp(x - t->dist_hp, -230000, 230000);         /* (x >> 2) * g fits 32 bits */
+        u = softclip(((x >> 2) * g) >> 10);                 /* >> 2 first: no overflow for loud poly; |u| <= 32767 */
+        t2 = ((u * u) >> 14) - 32768;                       /* T2 = 2u^2 - 1 */
+        t3 = ((u * t2) >> 14) - u;
+        t4 = ((u * t3) >> 14) - t2;
+        t5 = ((u * t4) >> 14) - t3;
+        y = u + mulq15(t2 + 32768, a2) + mulq15(t3, a3) + mulq15(t5, a5);   /* (2u^2: 0 in silence) */
+        y = mulq15(y, nrm);
+        *dc += ((y << 8) - *dc) >> 9;                       /* DC blocker, ~14 Hz (Q8) */
+        y -= *dc >> 8;
         t->dist_lp1 += mulq15(y - t->dist_lp1, k);         /* two poles: tames the fizz */
         t->dist_lp2 += mulq15(t->dist_lp1 - t->dist_lp2, k);
         b[i] = mulq15(t->dist_lp2, mk);
