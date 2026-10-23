@@ -2,7 +2,29 @@
 
 Custom firmware for the M-VAVE FM-1, forked from Felucca by Hügelton Instruments
 (GPL-3.0-only). Chip: JieLi AC791N/WL82 with a pi32v2 CPU, built with JieLi's clang 4.0.1
-and three AC79 SDK files. Read README.md and BUILDING.md before your first change.
+and three AC79 SDK files.
+
+## Reading
+- Read BUILDING.md. README.md is very long: open only the section you need.
+- Don't explore the repo. Use the Map below. If something isn't listed, search for
+  the exact name with rg instead of reading whole folders.
+
+## Map
+(to be filled in)
+
+## Scope
+- One task per session. Don't add extras I didn't ask for.
+- When the PR is open, stop.
+
+## Tests
+- Run tests only through tests/run_tests.sh, or the exact command it uses for one suite.
+  Never hand-compile a test.
+- If a chained command fails partway, everything after it is stale. Re-run before reading output.
+- Run the full suite once before opening a PR.
+
+## Ask first
+- Before changing any saved format (settings, projects, presets, backups), stop and explain
+  the change and what happens on downgrade. Wait for my OK.
 
 ## Never
 - Never modify firmware/loader/ (the update loader), the update entry (firmware/src/ota.c),
