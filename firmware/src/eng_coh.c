@@ -15,6 +15,7 @@
  * State: per voice a coh_v_t in the part's engine memory (engines.c eng_mem). v->s[0] is 1 once the voice has sounded
  * (kept on a retrigger: .keep), so a retrigger only collapses the stack and a new voice also scatters its phases. */
 #define COH_NOSC 5
+#define COH_TONE (100 << 8)      /* the tone filter's cutoff at rest (of 127 << 8): open, a little off the top */
 
 typedef struct {
     uint32_t ph[COH_NOSC];       /* the saws' phases */
@@ -152,7 +153,7 @@ static int coh_control(track_t *t, voice_t *v, coh_v_t *c, const vmod_t *m, coh_
     b->g0 = c->norm;
     c->norm += (nt - c->norm) >> 3;
     b->g1 = c->norm;
-    tsvf_coef(&b->f, m->cutoff, 20);
+    tsvf_coef(&b->f, COH_TONE + m->cutoff, 20);          /* (m->cutoff: the LFO / ENV -> FILTER offset, 0 at rest) */
     /* the damage: WEAR holds samples (up to ~42) and drops bits (16 -> ~4), DROP gates out stretches; all with the
      * coherence lost, gone again as the stack recovers */
     wear = p[P_E6] * 258;                                           /* Q15 */
