@@ -29,8 +29,11 @@ and three AC79 SDK files. Read README.md and BUILDING.md before your first chang
 ## Every change
 1. Work on a new branch, never on main.
 2. ./build.sh must succeed.
-3. tests/run_tests.sh must pass. If the sound changed on purpose, run
-   GOLDEN_UPDATE=1 sh tests/run_tests.sh and say so in the PR.
+3. In the session, run only the tests that cover what you changed (the regression
+   renders in tests/regress.c for sound or engine changes, the UI tests for screen
+   changes). Don't run the full tests/run_tests.sh; CI runs it on every PR, and a red
+   check is the signal to fix something. If the sound changed on purpose, update the
+   golden hashes for those renders and say so in the PR.
 4. Keep the browser emulator (web/emu/) building. If you can't build it in this VM,
    say so and let CI build it.
 5. Open a pull request covering: what changed, how to try it in the emulator (which
@@ -41,6 +44,9 @@ and three AC79 SDK files. Read README.md and BUILDING.md before your first chang
 - Saved projects and settings must keep loading. If you change a saved format, add a
   version number and keep loading the old one.
 - Update README.md's feature list when you add something a player would notice.
+- Don't re-verify the toolchain, download hosts or GitHub Action versions, and don't
+  install extra tools (Emscripten, linters) unless the task needs them. CI builds the
+  emulator.
 
 ## Borrowing from other firmwares
 - GPL-3.0 code (ChoralRoot, X0X, Melodee, Jangada and other Felucca forks) may be ported.
