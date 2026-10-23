@@ -48,7 +48,7 @@ jobs:
           path: build/*.fwsc
           if-no-files-found: error
       - name: Browser emulator
-        run: web/emu/build.sh
+        run: sh web/emu/build.sh
 
       - name: Site
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
