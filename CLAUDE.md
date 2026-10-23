@@ -14,13 +14,21 @@ and three AC79 SDK files.
 
 ## Scope
 - One task per session. Don't add extras I didn't ask for.
-- When the PR is open, stop.
+- When the change is pushed to sandbox (or the PR is open), stop.
 
 ## Tests
 - Run tests only through tests/run_tests.sh, or the exact command it uses for one suite.
   Never hand-compile a test.
 - If a chained command fails partway, everything after it is stale. Re-run before reading output.
-- Run the full suite once before opening a PR.
+- Don't run the full tests/run_tests.sh in the session; CI runs it on the PR to main.
+
+## Sandbox (the default)
+- Work on the `sandbox` branch: commit and push there, no PR per change. Each push builds the
+  firmware and the emulator and deploys them to the site (no test suite, about 5 minutes), so
+  the user tries the change at /webapp/try/ and on the FM-1.
+- In the session: ./build.sh, then only the one suite that covers the change.
+- Open a PR from sandbox to main only when the user says the device is ready; the full
+  suite runs there once for the whole batch.
 
 ## Ask first
 - Before changing any saved format (settings, projects, presets, backups), stop and explain
@@ -49,17 +57,15 @@ and three AC79 SDK files.
 - Memory is small (about 512 KB RAM, 1 MB flash). Report image and RAM size in the PR.
 
 ## Every change
-1. Work on a new branch, never on main.
+1. Work on `sandbox` (see Sandbox), never on main.
 2. ./build.sh must succeed.
-3. In the session, run only the tests that cover what you changed (the regression
-   renders in tests/regress.c for sound or engine changes, the UI tests for screen
-   changes). Don't run the full tests/run_tests.sh; CI runs it on every PR, and a red
-   check is the signal to fix something. If the sound changed on purpose, update the
-   golden hashes for those renders and say so in the PR.
+3. Run only the tests that cover what you changed (the regression renders in
+   tests/regress.c for sound or engine changes, the UI tests for screen changes). If the
+   sound changed on purpose, update the golden hashes for those renders and say so.
 4. Keep the browser emulator (web/emu/) building. If you can't build it in this VM,
    say so and let CI build it.
-5. Open a pull request covering: what changed, how to try it in the emulator (which
-   buttons), CPU and RAM impact, and anything unverified.
+5. Tell the user what changed, how to try it in the emulator (which buttons), CPU and RAM
+   impact, and anything unverified. The sandbox to main PR collects the same.
 
 ## Style
 - Small, focused changes. Match the existing code and naming.

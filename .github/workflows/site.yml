@@ -2,11 +2,13 @@
 # Build and test Felucca-Sog (BUILDING.md) on every push to main, pull request and manual run; the package
 # (build/*.fwsc) is kept as a workflow artifact. On main the site goes to GitHub Pages: the installer and
 # the editor (web/make_site.py) and the browser emulator (build/emu) at webapp/try/.
+# sandbox: every push builds the firmware and the emulator and deploys them to the same site, without the test
+# suite (about 5 minutes), to try changes in the browser and on the FM-1; the tests run once, on the PR to main.
 name: site
 
 on:
   push:
-    branches: [main]
+    branches: [main, sandbox]
   pull_request:
   workflow_dispatch:
 
@@ -41,6 +43,7 @@ jobs:
       - name: Build
         run: ./build.sh
       - name: Test
+        if: github.ref != 'refs/heads/sandbox'
         run: tests/run_tests.sh
       - uses: actions/upload-artifact@v7
         with:
@@ -51,19 +54,20 @@ jobs:
         run: sh web/emu/build.sh
 
       - name: Site
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/sandbox') && github.event_name != 'pull_request'
         run: |
           VERSION=$(sed -n 's/^#define FELUCCA_VERSION "\([^"]*\)".*/\1/p' firmware/src/felucca.c | head -n 1)
+          if [ "$GITHUB_REF" = refs/heads/sandbox ]; then VERSION="$VERSION-sbx"; fi   # the installer says it is a sandbox build
           python3 web/make_site.py build/felucca.fwsc "$VERSION" _site
           mkdir -p _site/webapp/try
           cp -R build/emu/. _site/webapp/try/
       - uses: actions/upload-pages-artifact@v5
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/sandbox') && github.event_name != 'pull_request'
         with:
           path: _site
 
   deploy:
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/sandbox') && github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     permissions:
