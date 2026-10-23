@@ -118,7 +118,9 @@ static const char *snd_missing(const track_t *t, uint32_t *code)
 static const uint8_t ENGINE_ORDER[NENG_SHOWN] = {
     0,                           /* ANALOG */
     12,                          /* FM6 */
-    14,                          /* COHERE (KOGERENT) */
+#if !FELUCCA_FM4
+    14,                          /* COHERE (KOGERENT; a FELUCCA_FM4=1 build, DIGITAL's tests, leaves it out) */
+#endif
 #if FELUCCA_FM4
     1,                           /* DIGITAL */
 #endif
@@ -132,7 +134,10 @@ static const uint8_t ENGINE_ORDER[NENG_SHOWN] = {
 
 /* the engines one can pick (engine 1 only with FELUCCA_FM4), in ENGINE_ORDER: eng_ok(e), the n-th of them
  * eng_vis(n), e's place among them eng_rank(e), the next / previous one eng_step(e, dir) (wraps) */
-static int eng_ok(uint32_t e) { return e < NENGINES && (FELUCCA_FM4 || e != ENGI_DIGITAL) && (FELUCCA_SLICE || e != ENGI_SLICE); }
+static int eng_ok(uint32_t e)
+{
+    return e < NENGINES && (FELUCCA_FM4 ? e != ENGI_KOGERENT : e != ENGI_DIGITAL) && (FELUCCA_SLICE || e != ENGI_SLICE);
+}
 static uint32_t eng_vis(uint32_t n) { return ENGINE_ORDER[n % NENG_SHOWN]; }
 static uint32_t eng_rank(uint32_t e)
 {
