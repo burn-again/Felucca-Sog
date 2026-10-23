@@ -43,9 +43,14 @@ and three AC79 SDK files.
 - Never commit SDK or toolchain files. They are fetched at build time.
 
 ## Repo layout
+- This fork diverges from Felucca on purpose: changes stay here and are never offered back
+  upstream. Changing an existing engine's or effect's sound, algorithm or defaults is fine
+  when the user asks for it; say which golden hashes moved and why.
 - firmware/engines/ is a git submodule (Felucca-Engines, MIT). If it is empty, run
-  `git submodule update --init`. Don't edit files inside it. New engines go in
-  firmware/src/eng_*.c like the others. Ask before changing ANALOG, LOFI, TRIO, WHEEL or NOISE.
+  `git submodule update --init`. Don't edit files inside it: it is upstream's repository. To
+  change ANALOG, LOFI, TRIO, WHEEL or NOISE, copy the engine into firmware/src/ (keep its MIT
+  header and copyright, list it in LICENSING.md), include the copy in engines.c and change
+  that. New engines go in firmware/src/eng_*.c like the others.
 - The package identity is PRODUCT in tools/build.py (FM-1_990). Keep it FM-1_9xx:
   web/make_site.py rejects anything else.
 
