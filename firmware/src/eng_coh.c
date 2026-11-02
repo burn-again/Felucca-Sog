@@ -13,8 +13,17 @@
  * The per-sample loop is the saws (dsp.c osc_saw, polyBLEP), the gain, the tone filter and the amp; the damage (hold,
  * bits, gate) runs in its own loop (coh_render_d) only while a voice is damaged.
  * State: per voice a coh_v_t in the part's engine memory (engines.c eng_mem). v->s[0] is 1 once the voice has sounded
- * (kept on a retrigger: .keep), so a retrigger only collapses the stack and a new voice also scatters its phases. */
+ * (kept on a retrigger: .keep), so a retrigger only collapses the stack and a new voice also scatters its phases.
+ * Felucca-Sog, deeper: OSC also picks the stack's wave (values 2..5 SAW as before, 6..9 PLS, 10..13 SUB; firmware
+ * before plays 6..13 as 5 saws): PLS, pulses whose widths scatter with the coherence lost (square when locked, a
+ * PWM chorus as the stack falls apart); SUB, the saws over a sine an octave down that never falls apart (the anchor
+ * a bass keeps). The velocity scales HIT (1/2 at velocity 0, all of it at 127): a soft note bends the stack, a hard
+ * one breaks it. The other waves (and every damaged block) fill the block's stack first (coh_fill), then the same
+ * loops as the saws. */
 #define COH_NOSC 5
+enum { COH_SAW, COH_PLS, COH_SUB };
+#define COH_OSC_MAX 13           /* OSC: 2..5 SAW, 6..9 PLS, 10..13 SUB */
+#define COH_SUB_LVL 9000         /* SUB's sine (Q15, after the stack's gain) */
 #define COH_TONE (100 << 8)      /* the tone filter's cutoff at rest (of 127 << 8): open, a little off the top */
 
 typedef struct {
@@ -32,6 +41,7 @@ typedef struct {
     int32_t ic1, ic2;            /* tone filter */
     int32_t rng;
     uint32_t blk;                /* blocks since the voice started */
+    uint32_t sub;                /* SUB: the sine's phase */
 } coh_v_t;
 typedef struct {
     coh_v_t v[NVOICE];
@@ -65,7 +75,8 @@ static void coh_note_on(track_t *t, voice_t *v)
 {
     coh_v_t *c = coh_of(t, v);
     v->s[0] = 0;                 /* 0: a new voice (render scatters it); a retrigger gets its 1 back (.keep) */
-    c->coh = 32767 - t->p[P_E2] * 258;                   /* HIT 127: coherence ~0 */
+    c->coh = 32767 - t->p[P_E2] * (129 + v->vel) * 258 / 256;   /* HIT 127 at velocity 127: coherence ~0; at
+                                                          * velocity 0 half of it */
     if (c->coh < 0)
         c->coh = 0;
 }
@@ -92,6 +103,7 @@ static void coh_start(track_t *t, voice_t *v, coh_v_t *c)
 /* the block's control values (shared by the two loops) */
 typedef struct {
     uint32_t n, inc[COH_NOSC];
+    uint32_t wave, pw[COH_NOSC]; /* COH_SAW / PLS / SUB; PLS: the pulses' widths */
     int32_t g0, g1;              /* the gain over the block, Q14 */
     tsvf_t f;
     int32_t hold, qs, dropp;     /* damage: hold Q8, quantiser shift, dropout chance Q15 */
@@ -101,7 +113,7 @@ typedef struct {
 static int coh_control(track_t *t, voice_t *v, coh_v_t *c, const vmod_t *m, coh_blk_t *b)
 {
     const int16_t *p = t->p;
-    uint32_t n = (uint32_t)clamp(p[P_E0], 2, COH_NOSC), k, vi = (uint32_t)(v - t->v);
+    uint32_t osc = (uint32_t)clamp(p[P_E0], 2, COH_OSC_MAX) - 2u, n = 2u + osc % 4u, k, vi = (uint32_t)(v - t->v);
     int32_t inv, inv2, f, wild, tight, spc, bump, kmul, kq, drift, sx = 0, sy = 0, sc[COH_NOSC], ss[COH_NOSC];
     int32_t r, est, nt, wear;
     uint32_t den, rr, inc16 = m->inc >> 16;
@@ -145,11 +157,15 @@ static int coh_control(track_t *t, voice_t *v, coh_v_t *c, const vmod_t *m, coh_
             d += (int32_t)inc16 * ((c->kq * s) >> 15);
         }
         b->inc[k] = m->inc + (uint32_t)d;
+        b->pw[k] = 0x80000000u + (uint32_t)(coh_det(k, n) * (f >> 4) * 2560);   /* PLS: 50 % +- 35 % with f */
     }
     b->n = n;
+    b->wave = osc / 4u;
     /* the gain: a stack of n saws peaks near n r (the part in step) + sqrt(n (1 - r^2)) (the rest); 0.45 / that */
     est = (int32_t)n * r + (int32_t)coh_isqrt((uint32_t)n * (uint32_t)(32767 - ((r * r) >> 15))) * 181;
     nt = 241591910 / (est < 32768 ? 32768 : est);                   /* 0.45 x 2^14 x 2^15 / est */
+    if (b->wave == COH_PLS)
+        nt = (nt * 19661) >> 15;                                    /* (pulses: x 0.6, the saws' loudness) */
     b->g0 = c->norm;
     c->norm += (nt - c->norm) >> 3;
     b->g1 = c->norm;
@@ -175,18 +191,45 @@ static inline int32_t coh_stack(uint32_t *ph, const uint32_t *inc, uint32_t n)
     return sum;
 }
 
-/* a damaged voice: the stack, then hold, bits, the gate, a DC blocker (the quantiser and the gate offset) */
-static __attribute__((noinline)) void coh_render_d(coh_v_t *c, const coh_blk_t *b, int32_t *out, uint32_t n,
-                                                    const vmod_t *m)
+/* the block's stack at its gain into y, any wave (the saws as coh_render's loop computes them) */
+static __attribute__((noinline)) void coh_fill(coh_v_t *c, const coh_blk_t *b, int32_t *y, uint32_t n, uint32_t subinc)
 {
-    uint32_t i, ph[COH_NOSC];
-    int32_t g = b->g0, dg = (b->g1 - b->g0) >> CTL_LOG2, ic1 = c->ic1, ic2 = c->ic2;
-    int32_t hacc = c->hacc, held = c->held, gate = c->gate, gtgt = c->gtgt, grain = c->grain;
-    int32_t dcx = c->dcx, dcy = c->dcy, hold = b->hold, qs = b->qs;
+    uint32_t i, k, ph[COH_NOSC], sp = c->sub;
+    int32_t g = b->g0, dg = (b->g1 - b->g0) >> CTL_LOG2;
     memcpy(ph, c->ph, sizeof ph);
     for (i = 0; i < n; i++) {
-        int32_t y = ((coh_stack(ph, b->inc, b->n) >> 1) * g) >> 13;
+        int32_t s;
+        if (b->wave == COH_PLS) {
+            for (k = 0, s = 0; k < b->n; k++) {
+                ph[k] += b->inc[k];
+                s += osc_pulse(ph[k], b->inc[k], b->pw[k]) << 1;
+            }
+        } else {
+            s = coh_stack(ph, b->inc, b->n);
+        }
+        s = ((s >> 1) * g) >> 13;
         g += dg;
+        if (b->wave == COH_SUB) {
+            s += (sine_i(sp) * COH_SUB_LVL) >> 15;
+            sp += subinc;
+        }
+        y[i] = s;
+    }
+    memcpy(c->ph, ph, sizeof ph);
+    c->sub = sp;
+}
+
+/* a damaged voice: the stack (coh_fill's y), then hold, bits, the gate, a DC blocker (the quantiser and the gate
+ * offset) */
+static __attribute__((noinline)) void coh_render_d(coh_v_t *c, const coh_blk_t *b, int32_t *y0, int32_t *out,
+                                                    uint32_t n, const vmod_t *m)
+{
+    uint32_t i;
+    int32_t ic1 = c->ic1, ic2 = c->ic2;
+    int32_t hacc = c->hacc, held = c->held, gate = c->gate, gtgt = c->gtgt, grain = c->grain;
+    int32_t dcx = c->dcx, dcy = c->dcy, hold = b->hold, qs = b->qs;
+    for (i = 0; i < n; i++) {
+        int32_t y = y0[i];
         hacc += 256;
         if (hacc >= hold) {
             hacc -= hold;
@@ -206,7 +249,6 @@ static __attribute__((noinline)) void coh_render_d(coh_v_t *c, const coh_blk_t *
         y = tsvf_lp(&b->f, dcy, &ic1, &ic2);
         out[i] += voice_amp(clamp(y, -32767, 32767), m, i) << 1;
     }
-    memcpy(c->ph, ph, sizeof ph);
     c->ic1 = ic1;
     c->ic2 = ic2;
     c->hacc = hacc;
@@ -218,6 +260,22 @@ static __attribute__((noinline)) void coh_render_d(coh_v_t *c, const coh_blk_t *
     c->dcy = dcy;
 }
 
+/* an undamaged voice of PLS or SUB: the stack (coh_fill), the tone filter, the amp (as coh_render's saws) */
+static __attribute__((noinline)) void coh_render_w(coh_v_t *c, const coh_blk_t *b, int32_t *out, uint32_t n,
+                                                    const vmod_t *m)
+{
+    int32_t y[CTL], ic1, ic2;
+    uint32_t i;
+    coh_fill(c, b, y, n, m->inc >> 1);
+    ic1 = c->ic1;
+    ic2 = c->ic2;
+    for (i = 0; i < n; i++)
+        out[i] += voice_amp(clamp(tsvf_lp(&b->f, y[i], &ic1, &ic2), -32767, 32767), m, i) << 1;
+    c->ic1 = ic1;
+    c->ic2 = ic2;
+    c->dcx = c->dcy = 0;
+}
+
 static void coh_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
 {
     coh_v_t *c = coh_of(t, v);
@@ -227,7 +285,13 @@ static void coh_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const v
     if (!v->s[0])
         coh_start(t, v, c);
     if (coh_control(t, v, c, m, &b)) {
-        coh_render_d(c, &b, out, n, m);
+        int32_t y[CTL];
+        coh_fill(c, &b, y, n, m->inc >> 1);
+        coh_render_d(c, &b, y, out, n, m);
+        return;
+    }
+    if (b.wave != COH_SAW) {                             /* PLS, SUB */
+        coh_render_w(c, &b, out, n, m);
         return;
     }
     g = b.g0;
@@ -253,13 +317,19 @@ static const preset_t COH_PRESETS[] = {
     {"CHOIR", {5, 40, 70, 100, 70, 90, 20, 0}, {30, 90, 120, 80}, 0, 0, FX(0, 20, 20, 70)},
     {"TAPE", {3, 30, 100, 86, 40, 110, 110, 40}, {0, 80, 100, 50}, 0, 0, FX(10, 0, 40, 40)},
     {"LOCK", {4, 90, 127, 80, 127, 30, 50, 90}, {0, 70, 90, 40}, 0, 1, FX(0, 0, 30, 30)},
+    /* Felucca-Sog, deeper: the other waves (OSC 6..9 PLS, 10..13 SUB) */
+    {"HOLLOW", {8, 70, 100, 96, 60, 80, 30, 20}, {10, 90, 115, 70}, 0, 0, FX(0, 20, 30, 60)},
+    {"ANCHOR", {12, 50, 110, 88, 80, 60, 60, 40}, {0, 80, 100, 40}, 0, 1, FX(0, 0, 20, 20)},
 };
+/* OSC: the stack's size and wave (values below 2 are never held: min 2) */
+static const char *const N_COH_OSC[] = {"0", "1", "2SAW", "3SAW", "4SAW", "5SAW", "2PLS", "3PLS", "4PLS", "5PLS",
+                                        "2SUB", "3SUB", "4SUB", "5SUB"};
 
 static const engine_t ENG_KOGERENT = {
     .name = "COHERE",
     .page_title = {"COH", "WEAR"},
     .edit = {
-        {"OSC", F_INT, 2, COH_NOSC, 4, 0, "osc"},
+        {"OSC", F_ENUM, 2, COH_OSC_MAX, 4, N_COH_OSC, 0},   /* the stack: 2..5 saws (as before), pulses, saws + sub */
         {"SPRD", F_PCT, 0, 127, 58, 0, 0},     /* the loose spread: 10 .. 160 cents */
         {"HIT", F_PCT, 0, 127, 117, 0, 0},     /* how far a note knocks the coherence down */
         {"REC", F_TIME, 0, 127, 93, 0, 0},     /* recovery (the time constant x 3) */

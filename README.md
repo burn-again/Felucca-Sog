@@ -9,6 +9,9 @@ What Felucca-Sog adds:
 - **COHERE** (КОГЕРЕНТ), the coherence engine: a stack of 2 to 5 detuned saws per voice that falls apart on every note
   (the spread opens, samples hold, bits drop, short dropouts stutter), then a Kuramoto pull hauls the phases back into step
   and lets go, and the drift apart is the chorus. EDIT: OSC SPRD HIT REC / PULL DRFT WEAR DROP; HOME: HIT REC PULL WEAR.
+  OSC also picks the stack's wave: SAW, PLS (pulses whose widths scatter as the stack falls apart: a PWM chorus) or
+  SUB (the saws over a sine an octave down that never falls apart). Velocity sets how hard a note hits: a soft one
+  bends the stack, a hard one breaks it. Presets HOLLOW (PLS) and ANCHOR (a SUB bass).
   Settings saved by Felucca (or older Felucca-Sog) load as they were: the MIDI LEARN map moves to its new place.
 - **POLV**, a Polivoks-style filter for ANALOG (EDIT > FILTER > TYPE), the default on power-on and for new sounds:
   saturating integrators, so high RES screams and bites instead of ringing clean. Saved projects keep their filter.

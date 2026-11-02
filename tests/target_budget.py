@@ -21,6 +21,7 @@ FUNCS = ["analog_render", "digital_render", "digital_render_legacy", "digital_re
          "dv_efm_pair", "dv_efm_run",                         # Felucca-Sog: the EFM kit (drum_voice.c)
          "slicer_track",
          "coh_render", "coh_render_d",                       # KOGERENT (eng_coh.c): the clean stack, a damaged voice
+         "coh_fill", "coh_render_w",                         # .. Felucca-Sog: any wave's stack, PLS / SUB undamaged
          "fm1_alnk0_irq", "fm1_timer5_irq",               # the audio ISR; TIMER5: the key / LED scan (hal/fm1_input.h)
          "mix_part",                                        # a part's block (fx.c), on either core since the second
          "uac_tap48",                                       # the USB audio input at 48 kHz: the 44.1 -> 48 resampler (usb.c)

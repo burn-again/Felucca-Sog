@@ -30,7 +30,9 @@ dv_efm_pair 61
 dv_efm_run 182
 slicer_track 632
 coh_render 1229
-coh_render_d 331
+coh_render_d 128
+coh_fill 614
+coh_render_w 50
 fm1_alnk0_irq 8285
 fm1_timer5_irq 33387
 click_render 30

@@ -494,9 +494,10 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         ed_v(d->def);
         ed_str(d->label, 8);
         ed_str(d->unit, 8);
-        if (d->fmt == F_ENUM && d->names)                  /* up to 24 (the matrix DST has 20) */
+        if (d->fmt == F_ENUM && d->names)                  /* up to 24 (the matrix DST has 20); value min first
+                                                          * (names[] are by value: Felucca-Sog's COHERE OSC is 2..13) */
             for (i = 0; i <= (uint32_t)(d->max - d->min) && i < 24u; i++)
-                ed_str(d->names[i], 8);
+                ed_str(d->names[d->min + (int32_t)i], 8);
         break;
     case ED_STEP_GET:
     case ED_STEP_SET: {

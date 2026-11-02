@@ -1762,11 +1762,13 @@ function makeMockDevice(opt = {}) {
         P("PAD", [0, 0, 0, 0, 0, 0, 30, 4], [0, 0, 127, 0], 0, 5), P("MARIMBA", [0, 0, 0, 0, 0, 0, 0, 5], [0, 0, 127, 0], 0, 3),
         P("ORGAN", [0, 0, 0, 0, 0, 0, 0, 6], [0, 0, 127, 0], 0, 6), P("PLUCK", [0, 0, 0, 0, 0, 0, 0, 7], [0, 0, 127, 0], 0, 13)] },
     GONE_ENG,
-    { name: "COHERE", titles: ["COH", "WEAR"], edit: [D("OSC", F.INT, 2, 5, 4, null, "osc"), D("SPRD", F.PCT, 0, 127, 58),
+    { name: "COHERE", titles: ["COH", "WEAR"], edit: [D("OSC", F.ENUM, 2, 13, 4, ["2SAW", "3SAW", "4SAW", "5SAW", "2PLS", "3PLS", "4PLS", "5PLS",
+        "2SUB", "3SUB", "4SUB", "5SUB"]), D("SPRD", F.PCT, 0, 127, 58),
         D("HIT", F.PCT, 0, 127, 117), D("REC", F.TIME, 0, 127, 93), D("PULL", F.PCT, 0, 127, 51), D("DRFT", F.PCT, 0, 127, 70),
         D("WEAR", F.PCT, 0, 127, 80), D("DROP", F.PCT, 0, 127, 70)],   /* Felucca-Sog: the coherence engine (eng_coh.c) */
       presets: [P("COLLAPSE", [4, 58, 117, 93, 51, 70, 80, 70], [0, 90, 110, 60], 0, 0), P("CHOIR", [5, 40, 70, 100, 70, 90, 20, 0], [30, 90, 120, 80], 0, 0),
-        P("TAPE", [3, 30, 100, 86, 40, 110, 110, 40], [0, 80, 100, 50], 0, 0), P("LOCK", [4, 90, 127, 80, 127, 30, 50, 90], [0, 70, 90, 40], 1, 0)] },
+        P("TAPE", [3, 30, 100, 86, 40, 110, 110, 40], [0, 80, 100, 50], 0, 0), P("LOCK", [4, 90, 127, 80, 127, 30, 50, 90], [0, 70, 90, 40], 1, 0),
+        P("HOLLOW", [8, 70, 100, 96, 60, 80, 30, 20], [10, 90, 115, 70], 0, 0), P("ANCHOR", [12, 50, 110, 88, 80, 60, 60, 40], [0, 80, 100, 40], 1, 0)] },
   ];
   const FM6_E = ENG.findIndex((e) => e.name === "FM6"), FM6_OWN = FM6.FACTORY_PK.length, DRUM_E = ENG.findIndex((e) => e.name === "DRUM");
   /* factory PATTERNS[] (engines.c; the device loads them from SAVE > PHRASES, presets only suggest one): absolute
