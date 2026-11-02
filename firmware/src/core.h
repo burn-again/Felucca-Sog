@@ -107,6 +107,9 @@ static void params_by_count(int16_t *out, const int16_t *in, uint32_t np, const 
     uint32_t i, nc = np - 8u;
     for (i = 0; i < P_E0; i++)
         out[i] = i < nc ? in[i] : def[i];
+    if (nc <= P_FTYPE)                  /* Felucca-Sog: a store from before the filter TYPE (1.5) was made with LP: LP,
+                                         * not today's default (POLV) */
+        out[P_FTYPE] = 0;
     for (i = 0; i < 8u; i++)
         out[P_E0 + i] = in[nc + i];
 }

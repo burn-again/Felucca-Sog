@@ -33,6 +33,10 @@ static inline int32_t analog_sat(int32_t x)                    /* ~24576 tanh(x 
     return (softclip(x + (x >> 2) + (x >> 4) + (x >> 6)) * 3) >> 2;   /* (x 1.33: shifts, no divide) */
 }
 #define ANALOG_PG(drv) (32768 + (drv) * 1290)          /* POLV's input gain, Q15: 1x .. 6x */
+/* .. and its make-up after the filter, 2 / (1 + gain) (Q15: 1x at DRV 0, 0.67x at 25, 0.29x at 127): more DRV is more
+ * grit, not more level (the integrators' saturation is the character; the level stays near LP's) */
+#define ANALOG_PM(pg) ((int32_t)((19661u * 65536u) / (uint32_t)(32768 + (pg))))   /* (x 0.6: the saturated wave is
+                                                     * denser than LP's, ~+4.5 dB rms at the same peak: matched) */
 /* the filter's input: s / 2, with POLV x its DRV gain pg (Q15; (s / 8) (pg / 4): 32 bits) */
 static inline int32_t analog_fin(int32_t s, uint32_t ft, int32_t pg)
 {
@@ -108,7 +112,7 @@ static __attribute__((noinline)) void analog_render_x(track_t *t, voice_t *v, in
             inc2 += (uint32_t)((int32_t)(inc2 >> 12) * m->fine);
     }
     uint32_t ft = (uint32_t)p[P_FTYPE];
-    int32_t fk = ANALOG_K(p[P_E5]), pg = ANALOG_PG(drv);
+    int32_t fk = ANALOG_K(p[P_E5]), pg = ANALOG_PG(drv), pm = ANALOG_PM(pg);
     analog_coef(&flt, cut, p[P_E5], ft);
     for (i = 0; i < n; i++) {
         int32_t a = osc_saw(ph0, inc1), b, s;
@@ -137,7 +141,10 @@ static __attribute__((noinline)) void analog_render_x(track_t *t, voice_t *v, in
             s += mulq15((int32_t)(noise32(&nst) >> 17) - 16384, nz);
         if (drv && ft != AF_POLV)
             s = softclip(((s >> 2) * (drive >> 2)) >> 11);
-        s = soft_knee(analog_tap(&flt, fk, analog_fin(s, ft, pg), &ic1, &ic2, ft), 16000) << 1;
+        s = analog_tap(&flt, fk, analog_fin(s, ft, pg), &ic1, &ic2, ft);
+        if (ft == AF_POLV)
+            s = (s * pm) >> 15;
+        s = soft_knee(s, 16000) << 1;
         out[i] += voice_amp(s, m, i) << 1;
     }
     v->ph[0] = ph0;
@@ -166,7 +173,7 @@ static inline __attribute__((always_inline)) void analog_osc(track_t *t, voice_t
     int32_t nz = noise * 200, drv = p[P_E6];
     uint32_t ph0 = v->ph[0], ph1 = v->ph[1];                  /* state in locals: out[] may alias v->s[] */
     int32_t ic1 = v->s[0], ic2 = v->s[1], nst = v->s[2];
-    int32_t fk = ft ? ANALOG_K(p[P_E5]) : 0, pg = ANALOG_PG(drv);
+    int32_t fk = ft ? ANALOG_K(p[P_E5]) : 0, pg = ANALOG_PG(drv), pm = ANALOG_PM(pg);
     analog_coef(&flt, cut, p[P_E5], ft);
     for (i = 0; i < n; i++) {
         int32_t a, b, s;
@@ -202,6 +209,8 @@ static inline __attribute__((always_inline)) void analog_osc(track_t *t, voice_t
         {   /* filter, linear up to half scale, then a soft knee (only resonance peaks saturate); soft_knee()
              * written out: the host compiler makes this loop 1 % slower with the call */
             int32_t y = ft ? analog_tap(&flt, fk, analog_fin(s, ft, pg), &ic1, &ic2, ft) : tsvf_lp(&flt, s >> 1, &ic1, &ic2);
+            if (ft == AF_POLV)
+                y = (y * pm) >> 15;
             int32_t a = y < 0 ? -y : y;
             if (a > 16000) {
                 a = 16000 + (softclip((a - 16000) * 2) >> 1);

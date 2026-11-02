@@ -488,6 +488,8 @@ static int formats(void)
     for (i = 0; i < MOTION_MAX; i++)
         motion_set_event(&trk[i % 4u], (i / 4u) % NSTEP, i / 4u < NSTEP ? P_REV : P_PAN, (int16_t)(i / 4u < NSTEP ? i / 4u : -(int32_t)(i % 60u)));
     motion_set_lock(&trk[2], 9, P_E0 + 3, 7);
+    for (i = 0; i < NTRK; i++)                        /* (Felucca-Sog: TYPE's default is POLV; the older formats below */
+        trk[i].p[P_FTYPE] = 0;                        /* hold no TYPE and load as LP, so the project they are made of: LP) */
     project_capture(&a);
     ok = motion.count == MOTION_MAX && proj_pack(&st, &a) && ((uint32_t *)st.raw)[0] == 0x46554E41u &&
          ((uint32_t *)st.raw)[1] == 3840u && st.raw[66] == P_COUNT && proj_import(&b, &st, sizeof st) && !memcmp(&a, &b, sizeof a);

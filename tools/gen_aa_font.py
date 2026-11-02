@@ -41,13 +41,17 @@ CODE = {0x2026: 0x85}                  # characters outside Latin-1 -> their one
 PHASES, PHASES_L = 4, 2                # horizontal phases per glyph (aa_raster.raster_font): S M, L
 # faces stored Huffman-coded (--huff): M and L. S, the most drawn and the least compressible (-15 %), stays
 # 2 px per byte, so the labels draw at full speed
-HUFF = [("M", "L")]
+HUFF = [("M", "L", "X", "B")]
 # L draws only "FELUCCA", the UPDATE MODE countdown digit, the calibration's control names (panel.c
 # B_NAME / E_NAME) and MENU > LARGE's card values and page titles (ui_draw.c draw_column_tall, ui_graph.c
 # graph_title: # . / J W too; a value with another character is set in M): a sparse face of those glyphs, the
 # space as its range and the rest as extras
 # (ui_test.c checks that every L string is covered)
 L_CHARS = " #+-./0123456789ABCDEFGHIJKLMNOPQRSTUVWXY"
+# Felucca-Sog's big view (firmware/src/ui_big.c, after ChoralRoot FM-1's CRX / CRB, Quixotic7, GPL-3.0): two faces at weight
+# 700, one phase each: X 96 px (the value: figures, capitals, a few signs; sparse like L; 96 px is the tallest whose
+# glyphs fit the canvas's 124 rows) and B 40 px (the label and everything else bold: full ASCII)
+X_CHARS = " #%+-./0123456789?ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
 def preset(name):
@@ -55,7 +59,9 @@ def preset(name):
         v = str(FONTS.parent / "assets" / "fonts" / "InterTight[wght].ttf")   # SIL OFL 1.1, Google Fonts
         return [("S", v + "@400", 12, (32, 126), EXTRAS, 0.0, PHASES),
                 ("M", v + "@500", 15, (32, 126), EXTRAS, 0.0, PHASES),
-                ("L", v + "@600", 28, (32, 32), [ord(c) for c in L_CHARS[1:]], 0.0, PHASES_L)]
+                ("L", v + "@600", 28, (32, 32), [ord(c) for c in L_CHARS[1:]], 0.0, PHASES_L),
+                ("X", v + "@700", 96, (32, 32), [ord(c) for c in X_CHARS[1:]], 0.0, 1),
+                ("B", v + "@700", 40, (32, 126), EXTRAS, 0.0, 1)]
     if name == "standin":
         if os.path.exists(LOCAL_INTER):
             reg, med, semi = LOCAL_INTER + "#0", LOCAL_INTER + "#10", LOCAL_INTER + "#12"
