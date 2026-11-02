@@ -249,7 +249,7 @@ static void proj_trk_from(proj_trk_t *d, const int16_t *p, uint32_t np, uint8_t 
     int16_t def[P_E0];
     uint32_t k;
     for (k = 0; k < P_E0; k++)
-        def[k] = TP[k].def;
+        def[k] = k == P_FTYPE ? STORE_DEF_FTYPE : TP[k].def;
     params_by_count(d->p, p, np, def);
     d->engine = engine;                         /* (indices 0..7 of formats 1 and 2 as they were) */
     d->preset = preset;
@@ -546,7 +546,7 @@ static int proj_import_old(project_t *q, const void *b, int n)
             for (i = 0; i < NTRK; i++) {
                 int16_t def[P_COUNT];
                 if (v->t[i].engine >= NENGINES) return 0;
-                for (k = 0; k < P_COUNT; k++) def[k] = param_desc_of(v->t[i].engine, k)->def;
+                for (k = 0; k < P_COUNT; k++) def[k] = k == P_FTYPE ? STORE_DEF_FTYPE : param_desc_of(v->t[i].engine, k)->def;
                 params_by_count(q->t[i].p, v->t[i].p, 69u, def);
                 q->t[i].engine = v->t[i].engine; q->t[i].preset = v->t[i].preset;
                 for (k = 0; k < NSTEP; k++) {
@@ -716,7 +716,7 @@ static int proj_unpack(project_t *q, const uint8_t *b, uint32_t st)
         for (i = 0; i < np; i++) { if (b[pos] > 191u) return 0; values[i] = (int16_t)b[pos++] - 64; }
         q->t[t].engine = b[pos++]; q->t[t].preset = b[pos++];
         if (q->t[t].engine >= NENGINES) return 0;
-        for (i = 0; i < P_COUNT; i++) def[i] = param_desc_of(q->t[t].engine, i)->def;
+        for (i = 0; i < P_COUNT; i++) def[i] = i == P_FTYPE ? STORE_DEF_FTYPE : param_desc_of(q->t[t].engine, i)->def;
         params_by_count(q->t[t].p, values, np, def);
         for (i = 0; i < NSTEP; i++) {
             step_t *s = &q->t[t].step[i]; uint32_t meta, nd = 0;

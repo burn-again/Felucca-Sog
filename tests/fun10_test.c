@@ -643,7 +643,7 @@ static int formats(void)
         note_step(t, 1, 62, 3);
         memset(&r, 0, sizeof r);
         r.used = UP_USED; r.ver = UP_VER; r.engine = 0; r.np = P_COUNT;
-        for (i = 0; i < P_COUNT; i++) { up_set_value(&r, i, t->p[i]); def[i] = TP[i].def; }
+        for (i = 0; i < P_COUNT; i++) { up_set_value(&r, i, t->p[i]); def[i] = i == P_FTYPE ? STORE_DEF_FTYPE : TP[i].def; }   /* (as upreset.c) */
         up_pat_from(&r, t->step);
         up_params(&r, v, def);
         ok = v[P_LSYNC] == 4 && v[P_LPOL] == 1 && r.flags[0] == 0 && r.note[0] == 60 && r.flags[1] == 0 && r.note[1] == 62;

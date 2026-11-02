@@ -380,6 +380,8 @@ int main(void)
             q.t[3].p[P_E0 + i] = (int16_t)(i ? 30 : 3);   /* (PHYS MODEL SYMP: PHYS is gone, the values stay) */
         }
         q.phys = 1;
+        for (i = 0; i < NTRK; i++)                      /* (FUN4 holds no TYPE: it loads LP) */
+            q.t[i].p[P_FTYPE] = STORE_DEF_FTYPE;
         for (i = 1; i < NSTEP; i++)                     /* (the other steps rests) */
             q.t[0].step[i] = (step_t){{50, 0, 0, 0}, 1, ST_REST, 0, 0, 0, 0};
         q.t[0].step[0] = (step_t){{36, 42, 0, 0}, 2, ST_NOTE, 0, 96, 0, 0};
@@ -568,7 +570,7 @@ int main(void)
         chain_defaults(&a.chain);
         for (t = 0; t < NTRK; t++) {
             for (i = 0; i < P_COUNT; i++)
-                a.t[t].p[i] = param_desc_of(t == 1u ? ENGI_DIGITAL : 0u, i)->def;
+                a.t[t].p[i] = i == P_FTYPE ? STORE_DEF_FTYPE : param_desc_of(t == 1u ? ENGI_DIGITAL : 0u, i)->def;   /* (old formats: no TYPE, LP) */
             a.t[t].engine = t == 1u ? ENGI_DIGITAL : 0u;
             a.t[t].preset = t == 1u ? 5u : 0u;
             memcpy(a.fm6[t], FM6_INIT, FM6_PACKED);
@@ -642,7 +644,7 @@ int main(void)
         chain_defaults(&a.chain);
         for (t = 0; t < NTRK; t++) {
             for (i = 0; i < P_COUNT; i++)
-                a.t[t].p[i] = param_desc_of(ENGI_SAMPLE, i)->def;
+                a.t[t].p[i] = i == P_FTYPE ? STORE_DEF_FTYPE : param_desc_of(ENGI_SAMPLE, i)->def;
             a.t[t].engine = ENGI_SAMPLE;
             memcpy(a.fm6[t], FM6_INIT, FM6_PACKED);
         }

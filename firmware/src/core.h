@@ -101,15 +101,14 @@ enum {                          /* global parameters */
 /* stored parameters of an older layout -> today's P_* order. A store keeps np = the P_COUNT it was
  * written with; common parameters are only ever added just before P_E0, so the first np - 8 are
  * P_LEVEL.. in order and the last 8 are P_E0..P_E7; the parameters a store does not have take def[]
- * (user presets, projects of formats 1 and 2) */
+ * (user presets, projects of formats 1 and 2; the callers give TYPE LP there: STORE_DEF_FTYPE) */
+#define STORE_DEF_FTYPE 0                 /* Felucca-Sog: a store from before the filter TYPE (1.5) was made with LP: LP,
+                                           * not today's default (POLV) */
 static void params_by_count(int16_t *out, const int16_t *in, uint32_t np, const int16_t *def)
 {
     uint32_t i, nc = np - 8u;
     for (i = 0; i < P_E0; i++)
         out[i] = i < nc ? in[i] : def[i];
-    if (nc <= P_FTYPE)                  /* Felucca-Sog: a store from before the filter TYPE (1.5) was made with LP: LP,
-                                         * not today's default (POLV) */
-        out[P_FTYPE] = 0;
     for (i = 0; i < 8u; i++)
         out[P_E0 + i] = in[nc + i];
 }

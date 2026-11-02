@@ -263,6 +263,7 @@ int main(void)
         for (t = 0; t < NTRK; t++) {                   /* ORGAN PAD MARIMBA FUNK KEY, then E.PIANO BELL BASS BRASS */
             n = (k + t + 4u) % FM4_NPRESETS;
             defaults(full[t]);
+            full[t][P_FTYPE] = STORE_DEF_FTYPE;           /* (FUN3 holds no TYPE: it loads LP) */
             fm4_preset_values(full[t], n);
             for (i = 0; i <= P_SLDEPTH; i++)
                 v3.t[t].p[i] = full[t][i];
