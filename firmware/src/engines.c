@@ -12,7 +12,7 @@
  * that runs on across notes and switches stays outside (WHEEL's wheels, GRAIN's random numbers).
  * Sized by the largest, PHYS (3 x SYMP's slot); an engine that needs more than ENG_MEM_PART grows it for
  * every part (x NPART of the pool). Zero-initialised pool section: main.c fm1_cstart clears it. */
-#define ENG_MEM_PART 1824u                 /* Felucca-Sog: DRUM's lanes, the largest left (PHYS, GRAIN gone) */
+#define ENG_MEM_PART 2400u                 /* Felucca-Sog: DRUM's lanes, the largest left (PHYS, GRAIN gone; the EFM voices' state) */
 static union {
     uint64_t align;
     uint8_t b[ENG_MEM_PART];

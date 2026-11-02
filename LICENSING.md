@@ -67,6 +67,7 @@ All by Hügelton Instruments (Leo Kuroshita), in this tree:
 | The second core: its start, mailbox and guards from X0X by charlesvestal (<https://github.com/charlesvestal/fm1-x0x>, with the dual-core findings of Melodee by keremimo, <https://github.com/keremimo/melodee>); its audio split, measurements and hardening after Jangada by zednaked (<https://github.com/zednaked/jangada>); each credited in its files | GPL-3.0 | `firmware/hal/fm1_cpu1.{h,S}`, `firmware/src/fx.c`, `tests/c1_host.h`, `tests/dualcore_test.c` |
 | DotGothic16 font by The DotGothic16 Project Authors (<https://github.com/fontworks-fonts/DotGothic16>): the browser emulator's knob labels, served with its page (cut to printable ASCII; the font declares no Reserved Font Name) | SIL OFL 1.1 | `web/emu/fonts/DotGothic16-subset.woff`, `LICENSES/OFL-DotGothic16.txt` (also `web/emu/fonts/OFL.txt`) |
 | JieLi AC79 SDK by JieLi Technology: three of its files go into every `.fwsc` package (below); none are in this tree | Apache-2.0 | `LICENSES/Apache-2.0.txt` |
+| mdkit by Soejrd (<https://github.com/soejrd/mdkit>): the EFM voices (BD SD XT CP RS CB HH CY), ported to fixed point as DRUM's EFM kit (Felucca-Sog) | CC0 1.0 | `firmware/src/drum_voice.c` (dv_setup_efm, dv_efm_run), `LICENSES/CC0-1.0-mdkit.txt` |
 
 On the device, HOME held > ABOUT opens the information screen; turning PRESETS scrolls on into
 CREDITS, a short list of these authors, licences and source URLs.

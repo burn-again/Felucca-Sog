@@ -18,6 +18,7 @@ FUNCS = ["analog_render", "digital_render", "digital_render_legacy", "digital_re
          "trio_render", "trio_pass", "wheel_render", "wheel_block",
          "drum_render", "noise_render", "fm6_render", "fm6_op_run", "fm6_op_fb", "dv_metal_run", "dv_kick_run", "dv_snare_run", "dv_clap_run", "dv_hat_run", "dv_tom_run",   # drum_voice.c
          "dv_rim_run", "dv_bell_run", "dv_cym_run", "dv_out", "dv_metal_mix",
+         "dv_efm_pair", "dv_efm_run",                         # Felucca-Sog: the EFM kit (drum_voice.c)
          "slicer_track",
          "coh_render", "coh_render_d",                       # KOGERENT (eng_coh.c): the clean stack, a damaged voice
          "fm1_alnk0_irq", "fm1_timer5_irq",               # the audio ISR; TIMER5: the key / LED scan (hal/fm1_input.h)

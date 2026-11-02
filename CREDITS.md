@@ -18,6 +18,9 @@ thanks the work below; each keeps its own licence (see [LICENSE](LICENSE), [LICE
   with the dual-core findings of [Melodee](https://github.com/keremimo/melodee) by [keremimo](https://github.com/keremimo); its audio split,
   measurements and hardening after [Jangada](https://github.com/zednaked/jangada) by [zednaked](https://github.com/zednaked) (all GPL-3.0)
 - Big view (Felucca-Sog): its look after the screens of [ChoralRoot FM-1](https://github.com/Quixotic7/ChoralRootFM1) by [Quixotic7](https://github.com/Quixotic7) (GPL-3.0), a Felucca fork: one big value in Inter Tight 700 over the screen, its name under it; Felucca-Sog's own code
+- EFM drum kit (Felucca-Sog): the eight EFM voices (BD SD XT CP RS CB HH CY) ported to fixed point from
+  [mdkit](https://github.com/soejrd/mdkit) by Soejrd ([CC0 1.0](LICENSES/CC0-1.0-mdkit.txt)): their structure, control
+  laws, defaults and decay tables
 - Browser emulator: after [X0X](https://github.com/charlesvestal/fm1-x0x) by [charlesvestal](https://github.com/charlesvestal) (GPL-3.0), a Felucca fork whose browser build showed the way
 - Package format and boot files: [JieLi AC79 SDK](https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK) ([Apache-2.0](LICENSES/Apache-2.0.txt); three of its files are in every package, none in this tree)
 - Contributions: [keremimo](https://github.com/keremimo) (white-key scales, #2), [ChanceTheMaker](https://github.com/ChanceTheMaker)

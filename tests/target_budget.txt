@@ -10,7 +10,7 @@ trio_render 341
 trio_pass 175
 wheel_render 267
 wheel_block 102
-drum_render 86
+drum_render 91
 noise_render 259
 fm6_render 372
 fm6_op_run 72
@@ -26,6 +26,8 @@ dv_bell_run 52
 dv_cym_run 67
 dv_out 35
 dv_metal_mix 16
+dv_efm_pair 61
+dv_efm_run 182
 slicer_track 632
 coh_render 1229
 coh_render_d 331

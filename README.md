@@ -16,6 +16,11 @@ What Felucca-Sog adds:
   instead of a generic soft clip. With POLV, ANALOG's **DRV** drives into the filter itself: more DRV, more grit.
 - **CHEB**, an INSERT type: DRIVE, ORDER (which harmonic: 2nd .. 7th, swept smoothly), LEVEL; MIX brings the
   fundamental back.
+- **The EFM kit** (DRUM > KIT EFM, the preset EFM KIT): the eight EFM drum voices of
+  [mdkit](https://github.com/soejrd/mdkit) in fixed point, FM operator pairs with feedback: BD on KICK, SD on SNARE, CP
+  (up to 15 claps) on CLAP, HH on HAT CL, CY on HAT OP, XT on TOM, RS on RIM, CB on BELL. TUNE moves the pitch, DECY the
+  decay, TONE the FM depth, SNAP each voice's own control (BD XT: the pitch ramp, SD: the noise, CP: how many claps, RS:
+  the snare, CB: the snap, HH: the tremolo, CY: the feedback).
 - **The big view** (after ChoralRoot FM-1): turn a knob and what it changes fills the screen while it moves, the value
   in 96 px figures, its name under it, a bar of where it sits in its range, the track and engine on top. Hold a step
   and turn a knob (a parameter lock): the lock, LOCK and the step on top in the accent colour. Turn PRESETS: the

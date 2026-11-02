@@ -74,9 +74,10 @@ enum {
     DVT_PUNCH, DVT_ROUND, DVT_SNARE, DVT_CLAP, DVT_HATC, DVT_HATO, DVT_TOM, DVT_CONGA, DVT_RIM, DVT_CLAVE,
     DVT_BELL, DVT_CYM, DVT_COUNT
 };
+#define DVT_EFM DVT_COUNT                                /* Felucca-Sog: the EFM kit's run (no type of its own, no DV_DEF) */
 /* a lane of a model kit as a type: the kit (1..DV_NKIT) in the high 4 bits, the lane in the low 3 (Felucca's own
  * types: 0 above). Its run (the DVT_* it plays through) is the kit's (DV_KIT) */
-#define DV_NKIT 8                                        /* (1.5.6, #216: DEEP TIGHT PERC after 77) */
+#define DV_NKIT 9                                        /* (1.5.6, #216: DEEP TIGHT PERC after 77; Felucca-Sog: EFM) */
 #define DV_KITOF(t) ((uint32_t)(t) >> 4)
 #define DV_KTYPE(kit, lane) ((uint8_t)(((kit) << 4) | (lane)))
 
@@ -86,29 +87,70 @@ typedef struct {
     int16_t tune;                                        /* 1/16 semitone from the designed pitch */
 } dv_param_t;
 
+/* an EFM voice's coefficients (Felucca-Sog, DVT_EFM: the EFM kit, after mdkit's EFM voices, see dv_efm_run) */
+typedef struct {
+    uint32_t P[4];                                       /* the pairs' pitch words: a carrier steps P << 9 (Q32) */
+    uint32_t mf;                                         /* a modulator steps Pt x mf */
+    uint32_t fbm, fbc;                                   /* self phase modulation (x the last sine) of the modulators,
+                                                          * the carriers */
+    int32_t dm[2];                                       /* FM depth: the carrier's step + q (Pt dm >> 12), pair 0, others */
+    uint32_t pm;                                         /* PM depth: the carrier's phase + q pm (EFM CY) */
+    uint32_t kb[5];                                      /* per block, Q16: the amplitude, mod, ramp, third
+                                                          * envelopes' decays, the choke's */
+    int32_t q0[4];                                       /* .. their starts, Q30 */
+    int32_t k15[2];                                      /* the claps' per sample, Q15: a tooth, the tail */
+    int32_t hp[2], nh[2];                                /* one-pole high-passes (p, g Q14): the output, the noise */
+    int32_t ga, gb;                                      /* SD: the noise; RS: the snare pair; CB: the two envelopes;
+                                                          * HH: the tremolo's depth and offset (Q15) */
+    uint32_t trem, ph0;                                  /* HH: the tremolo's step; the phases' start */
+    uint8_t id, np, hps, teeth;                          /* the voice (DV_EFM_*), pairs, high-pass stages, claps */
+} dv_efm_c;
+
 typedef struct {                                         /* coefficients (dv_setup); meaning per type, see the run */
-    uint32_t inc[3];                                     /* phase increments, cycles Q32 */
-    uint32_t span[2];                                    /* pitch sweeps (increment above inc[0]) */
-    uint32_t k[3];                                       /* fast decays per sample, Q15 */
-    uint32_t kb[2];                                      /* slow decays per block, Q16 */
-    int32_t g[6];                                        /* gains, Q15 unless noted */
-    tsvf_t f[2];                                         /* band-passes */
-    int32_t hp;                                          /* one-pole coefficient, Q15 */
-    int32_t out;                                         /* output gain: type, LEVEL, accent (Q12) */
-    uint16_t hold, click;                                /* kick: hold (blocks), click length (samples); clap:
+    union {
+        struct {
+            uint32_t inc[3];                             /* phase increments, cycles Q32 */
+            uint32_t span[2];                            /* pitch sweeps (increment above inc[0]) */
+            uint32_t k[3];                               /* fast decays per sample, Q15 */
+            uint32_t kb[2];                              /* slow decays per block, Q16 */
+            int32_t g[6];                                /* gains, Q15 unless noted */
+            tsvf_t f[2];                                 /* band-passes */
+            int32_t hp;                                  /* one-pole coefficient, Q15 */
+            uint16_t hold, click;                        /* kick: hold (blocks), click length (samples); clap:
                                                           * tooth spacing (samples), teeth */
-    uint8_t type, mrow;                                  /* mrow: the metal source's ratios (DV_METAL_R) */
-    int16_t metal;                                       /* the metal source's pitch (p16) for this lane */
+            uint8_t mrow;                                /* mrow: the metal source's ratios (DV_METAL_R) */
+            int16_t metal;                               /* the metal source's pitch (p16) for this lane */
+        };
+        dv_efm_c efm;                                    /* DVT_EFM */
+    };
+    int32_t out;                                         /* output gain: type, LEVEL, accent (Q12) */
+    uint8_t type;
 } dv_coef_t;
+
+/* an EFM voice's state (DVT_EFM) */
+typedef struct {
+    uint32_t op[4][3];                                   /* per pair: the modulator's and the carrier's phases, their
+                                                          * last sines (16 bits each) */
+    int32_t q[4];                                        /* the envelopes (dv_efm_c.kb), Q30 */
+    int32_t hs[4];                                       /* the output high-passes' (x1, y1) */
+    int32_t nx, ny;                                      /* the noise's high-pass */
+    uint32_t na, nb;                                     /* the noise: an additive (Fibonacci) sequence */
+    uint32_t tph, ce;                                    /* the tremolo's phase; the claps' envelope (Q16) */
+} dv_efm_v;
 
 typedef struct {
     uint8_t type, trig, choke, live;
     uint16_t n, cnt;                                     /* counters: samples, teeth / hold blocks */
-    uint32_t ph[3];
-    uint32_t e[3];                                       /* fast envelopes, Q16 */
-    int32_t q[2];                                        /* slow envelopes, Q30 */
-    int32_t s[5];                                        /* filter states */
-    int32_t rng;
+    union {
+        struct {
+            uint32_t ph[3];
+            uint32_t e[3];                               /* fast envelopes, Q16 */
+            int32_t q[2];                                /* slow envelopes, Q30 */
+            int32_t s[5];                                /* filter states */
+            int32_t rng;
+        };
+        dv_efm_v efm;                                    /* DVT_EFM */
+    };
 } dv_voice_t;
 
 typedef struct {                                         /* the metal source: 6 square waves */
@@ -187,7 +229,7 @@ typedef struct {
     int16_t v[13];
 } dv_kit_t;
 /* the accent per kit: + (x / 16384) per accent step (75: +4 dB at full, as Felucca's own) */
-static const uint8_t DV_KIT_ACC[DV_NKIT] = {120, 45, 100, 40, 40, 80, 60, 70};
+static const uint8_t DV_KIT_ACC[DV_NKIT] = {120, 45, 100, 40, 40, 80, 60, 70, 75};
 static const dv_kit_t DV_KIT[DV_NKIT][DV_NLANE] = {
     {   /* 80 */
         /* deep sine, a small drop, long decay */
@@ -329,6 +371,18 @@ static const dv_kit_t DV_KIT[DV_NKIT][DV_NLANE] = {
         {DVT_CLAVE, 32, 1568, 149, 2131, {84, 28000, 10000, 6348, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
         /* 66's bell: sines 830 / 613 Hz */
         {DVT_RIM, 40, 1280, 60, 3629, {-84, 30000, 7500, 4096, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
+    },
+    {   /* EFM (Felucca-Sog): mdkit's EFM voices at their defaults (dv_efm_run). v0..v7 the voice's 8 controls in
+         * mdkit's order, v8 the voice (DV_EFM_*), v9 RS: the snare pair's pitch (p16 from the body's); HH: the
+         * tremolo's step */
+        {DVT_EFM, 0, 316, 100, 5655, {0, 64, 32, 127, 35, 14, 64, 24, 0, 0, 0, 0, 0}},           /* BD 25.6 Hz */
+        {DVT_EFM, 0, 850, 100, 18720, {27, 60, 14, 79, 0, 5, 127, 29, 1, 0, 0, 0, 0}},            /* SD 176 Hz */
+        {DVT_EFM, 0, 1161, 100, 2737, {50, 40, 127, 24, 115, 36, 87, 8, 3, 0, 0, 0, 0}},         /* CP 540 Hz */
+        {DVT_EFM, 0, 1038, 100, 1690, {26, 54, 26, 47, 0, 86, 93, 75, 6, 835, 0, 0, 0}},         /* HH 346 Hz */
+        {DVT_EFM, 0, 1180, 100, 3780, {64, 72, 96, 92, 45, 32, 64, 0, 7, 0, 0, 0, 0}},           /* CY 579 Hz */
+        {DVT_EFM, 0, 536, 100, 11430, {25, 50, 127, 111, 5, 4, 79, 0, 2, 0, 0, 0, 0}},            /* XT 56.5 Hz */
+        {DVT_EFM, 0, 1343, 100, 8560, {67, 10, 8, 15, 38, 25, 59, 0, 4, -501, 0, 0, 0}},        /* RS 1041 Hz */
+        {DVT_EFM, 0, 1047, 100, 6880, {54, 61, 92, 56, 17, 112, 42, 0, 5, 0, 0, 0, 0}},          /* CB 358 Hz */
     },
 };
 
@@ -517,6 +571,215 @@ static void dv_drive(int32_t *g, int32_t *keep, int32_t d)
     *keep = (int32_t)((19661u << 15) / (uint32_t)softclip((19661 * *g) >> 12));
 }
 
+/* ------------------------------------------------- the EFM kit (Felucca-Sog: after mdkit's EFM voices) --- */
+/* mdkit (github.com/soejrd/mdkit, CC0 1.0, CREDITS.md) describes the EFM drum voices as DSP56300 code: 24-bit words,
+ * FM operator pairs, decays per sample. Ported here in their structure and their control laws, not bit for bit: 16-bit
+ * sines (sine_i) and signals, 32-bit phases (a cycle 2^32; mdkit's 15-bit index x 2^17), the envelopes per block of
+ * CTL as Felucca's (Q30 ramped inside the block; the claps per sample), noise from the same additive sequence.
+ * The pair (dv_efm_pair): a modulator (P x mf, its own sine fed back into its phase: fbm) under the mod envelope,
+ * q = env x sine, moves the carrier's frequency (+ q (P dm >> 12): 8 x MOD / 128 x the pitch at full) or, EFM CY,
+ * its phase (q pm); the carrier feeds its sine back into its phase (fbc). P x (1 + 8 ramp): the ramp envelope
+ * (BD, XT: the pitch drop). The voices (v0..v7 their controls, mdkit's order and defaults):
+ *   BD  PTCH DEC RAMP RDEC MOD MFRQ MDEC MFB   one pair, the ramp, the modulator fed back (MFB)
+ *   SD  PTCH DEC NOIS NDEC MOD MFRQ MDEC HPF   one pair + noise high-passed under its envelope (NOIS, NDEC)
+ *   XT  PTCH DEC RAMP RDEC MOD MFRQ MDEC CLIC  one pair, the ramp (RAMP: up to 8 x the pitch), CLIC the start phase
+ *   CP  PTCH DEC CLPS CDEC MOD MFRQ MDEC HPF   one pair under the claps: up to 15 (CLPS / 8) re-struck at -26 dB
+ *                                              (CDEC: their decay), the last one decays by DEC
+ *   RS  PTCH DEC MOD HPF SNAR SPTC SDEC SMOD   two pairs without a mod envelope: the body (PTCH DEC MOD), the snare
+ *                                              (SPTC SDEC SMOD) mixed in by SNAR
+ *   CB  PTCH DEC SNAP FB MOD MFRQ MDEC         two pairs (1 : 1.48) averaged, carriers fed back (FB), SNAP: a share
+ *                                              of a faster envelope
+ *   HH  PTCH DEC TREM TFRQ MOD MFRQ MDEC FB    one pair, the carrier fed back (FB), under a tremolo (TREM TFRQ),
+ *                                              the amplitude 2 x its envelope at most 1
+ *   CY  PTCH DEC FB HPF MOD MFRQ MDEC          four pairs (1, 1.41, 1.80, 2.70) phase-modulated (MOD, MFRQ: the
+ *                                              modulator at (MFRQ + 8) / 16 of the carrier), fed back (FB), averaged,
+ *                                              two high-passes
+ * then (all but BD) a one-pole high-pass: HPF, or the voice's fixed one. DECAY TONE and the extra (SNAP) move DEC,
+ * MOD and the voice's SNAP control (RAMP NOIS RAMP CLPS SNAR SNAP TREM FB) from their defaults, one step each; TUNE
+ * the pitch (every pair) +-1 octave. */
+enum { DV_EFM_BD, DV_EFM_SD, DV_EFM_XT, DV_EFM_CP, DV_EFM_RS, DV_EFM_CB, DV_EFM_HH, DV_EFM_CY };
+/* mdkit's decay index 70..509 -> log2 of its per-sample step (1 - k, Q23), Q12 - 12288 (its four cubics, evaluated
+ * by tools: mdkit_decay_index) */
+static const uint16_t DV_EFM_DL[440] = {
+    64887, 64751, 64614, 64478, 64341, 64205, 64068, 63931, 63795, 63658, 63521, 63384, 63248, 63111, 62974, 62837,
+    62700, 62563, 62426, 62289, 62152, 62015, 61878, 61741, 61604, 61467, 61330, 61193, 61056, 60918, 60781, 60644,
+    60507, 60369, 60232, 60095, 59957, 59820, 59682, 59545, 59407, 59270, 59132, 58995, 58857, 58720, 58582, 58445,
+    58307, 58169, 58032, 57894, 57756, 57619, 57481, 57343, 57205, 57067, 56930, 56792, 56654, 56516, 56378, 56240,
+    56102, 55964, 55826, 55688, 55551, 55413, 55274, 55136, 54998, 54860, 54722, 54584, 54446, 54308, 54170, 54032,
+    53894, 53755, 53617, 53479, 53341, 53203, 53064, 52926, 52788, 52649, 52511, 52373, 52235, 52096, 51958, 51820,
+    51681, 51543, 51405, 51266, 51128, 50989, 50851, 50713, 50574, 50436, 50297, 50159, 50020, 49882, 49743, 49605,
+    49467, 49328, 49190, 49051, 48913, 48774, 48636, 48497, 48358, 48220, 48081, 47943, 47804, 47666, 47527, 47389,
+    47250, 47112, 46973, 46834, 46696, 46557, 46419, 46280, 46141, 46003, 45864, 45725, 45587, 45448, 45310, 45171,
+    45032, 44894, 44755, 44616, 44478, 44339, 44200, 44062, 43923, 43784, 43646, 43507, 43368, 43230, 43091, 42952,
+    42814, 42675, 42536, 42398, 42259, 42120, 41982, 41843, 41704, 41566, 41427, 41288, 41150, 41011, 40872, 40733,
+    40595, 40456, 40317, 40179, 40040, 39901, 39763, 39624, 39485, 39346, 39208, 39069, 38930, 38792, 38653, 38514,
+    38375, 38237, 38098, 37959, 37820, 37682, 37543, 37404, 37266, 37127, 36988, 36849, 36711, 36572, 36433, 36294,
+    36156, 36017, 35878, 35739, 35601, 35462, 35323, 35184, 35046, 34907, 34768, 34629, 34491, 34352, 34213, 34074,
+    33936, 33797, 33658, 33519, 33381, 33242, 33103, 32964, 32826, 32687, 32548, 32409, 32271, 32132, 31993, 31854,
+    31716, 31577, 31438, 31299, 31160, 31022, 30883, 30744, 30605, 30467, 30328, 30189, 30050, 29912, 29773, 29634,
+    29495, 29357, 29218, 29079, 28940, 28801, 28663, 28524, 28385, 28246, 28108, 27969, 27830, 27691, 27553, 27414,
+    27275, 27136, 26997, 26859, 26720, 26581, 26442, 26304, 26163, 26024, 25886, 25747, 25608, 25469, 25331, 25192,
+    25053, 24915, 24776, 24637, 24499, 24360, 24221, 24082, 23944, 23805, 23666, 23528, 23389, 23250, 23112, 22973,
+    22834, 22696, 22557, 22418, 22279, 22141, 22002, 21863, 21725, 21586, 21447, 21309, 21170, 21031, 20893, 20754,
+    20615, 20476, 20338, 20199, 20060, 19922, 19783, 19644, 19506, 19367, 19228, 19089, 18951, 18812, 18673, 18535,
+    18396, 18257, 18118, 17980, 17841, 17702, 17564, 17425, 17286, 17147, 17009, 16870, 16731, 16592, 16454, 16315,
+    16176, 16037, 15899, 15760, 15621, 15482, 15343, 15205, 15066, 14927, 14788, 14649, 14511, 14372, 14233, 14094,
+    13955, 13817, 13678, 13539, 13400, 13261, 13122, 12984, 12845, 12706, 12567, 12428, 12289, 12150, 12012, 11873,
+    11734, 11595, 11456, 11317, 11178, 11039, 10900, 10761, 10622, 10483, 10344, 10206, 10067, 9928, 9789, 9650,
+    9511, 9372, 9233, 9094, 8955, 8816, 8677, 8536, 8393, 8251, 8109, 7969, 7829, 7689, 7550, 7411,
+    7273, 7134, 6997, 6859, 6722, 6584, 6447, 6310, 6172, 6035, 5897, 5759, 5621, 5483, 5344, 5205,
+    5065, 4925, 4785, 4643, 4501, 4358, 4215, 4070,
+};
+/* 2^(L / 4096), L < 19 x 4096 (an integer: a step, Q23) */
+static uint32_t dv_efm_pow2(uint32_t L)
+{
+    uint32_t m = dv_exp2(L & 4095u), e = L >> 12;
+    return e >= 16u ? m << (e - 16u) : m >> (16u - e);
+}
+/* a per-sample step (Q23, log2 Q12: L) -> its decay per CTL block, Q16 ((1 - step)^32, squared 5 times) */
+static uint32_t dv_efm_kb(uint32_t L)
+{
+    uint32_t st = dv_efm_pow2(L), i;
+    int32_t k = st >= (1u << 23) ? 0 : (int32_t)((1u << 30) - (st << 7));
+    for (i = 0; i < CTL_LOG2; i++)
+        k = (int32_t)(((int64_t)k * k) >> 30);
+    return (uint32_t)k >> 14 > 65535u ? 65535u : (uint32_t)k >> 14;
+}
+/* .. per sample, Q15 */
+static int32_t dv_efm_k15(uint32_t L)
+{
+    uint32_t st = (dv_efm_pow2(L) + 128u) >> 8;
+    return st >= 32768u ? 0 : (int32_t)(32768u - st);
+}
+/* mdkit's decay index i -> L; decay_rate(knob, rate): index 147 + knob x rate / 32 */
+static uint32_t dv_efm_L(uint32_t i) { return (uint32_t)DV_EFM_DL[clamp((int32_t)i, 70, 509) - 70] + 12288u; }
+static uint32_t dv_efm_rate(uint32_t knob, uint32_t rate) { return dv_efm_L(147u + ((knob * 128u * rate) >> 12)); }
+/* mdkit's resonance (a one-pole high-pass, y = (1 + c) / 2 (x - x1) + c y1) with c = cq (Q23): c, (1 + c) / 2 (Q23) */
+static void dv_efm_hp(int32_t *hp, uint32_t cq)
+{
+    hp[0] = (int32_t)cq;
+    hp[1] = (int32_t)((cq + (1u << 23)) >> 1);
+}
+/* a high-pass's c (Q23) with its corner moved by dp (p16): 1 - c x 2^(dp / 192) */
+static uint32_t dv_efm_tune_hp(uint32_t cq, int32_t dp)
+{
+    uint64_t w = (1u << 23) - cq;
+    w = dp >= 0 ? (w * dv_exp2((uint32_t)dp * 64u / 3u)) >> 16 : (w * dv_exp2((uint32_t)(dp + 192) * 64u / 3u)) >> 17;
+    return w >= (1u << 23) ? 0u : (1u << 23) - (uint32_t)w;
+}
+#define DV_EFM_63 (0x50C335 << 7)                        /* 0.631 (mdkit's -4 dB start), Q30 */
+#define DV_EFM_1 (0x7FFFFF << 7)                         /* full, Q30 */
+
+static __attribute__((noinline)) void dv_setup_efm(dv_coef_t *cc, const dv_kit_t *K, int32_t p16, uint32_t d, uint32_t tn, uint32_t x)
+{
+    static const uint8_t MODK[8] = {4, 4, 4, 4, 2, 4, 4, 4}, SNAPK[8] = {2, 2, 2, 2, 4, 2, 2, 2};
+    dv_efm_c *c = &cc->efm;
+    const int16_t *v = K->v;
+    uint32_t id = (uint32_t)v[8] & 7u, k[8], i, P = DV_P16(p16) >> 9;
+    for (i = 0; i < sizeof *c / 4u; i++)
+        ((uint32_t *)c)[i] = 0;
+    for (i = 0; i < 8u; i++)
+        k[i] = (uint32_t)clamp(v[i], 0, 127);
+    k[1] = (uint32_t)clamp((int32_t)k[1] + (int32_t)d - 64, 0, 127);
+    if (id == DV_EFM_RS)                                 /* (the snare pair's too: the rim's tail) */
+        k[6] = (uint32_t)clamp((int32_t)k[6] + (int32_t)d - 64, 0, 127);
+    k[MODK[id]] = (uint32_t)clamp((int32_t)k[MODK[id]] + (int32_t)tn - 64, 0, 127);
+    k[SNAPK[id]] = (uint32_t)clamp((int32_t)k[SNAPK[id]] + (int32_t)x - 64, 0, 127);
+    c->id = (uint8_t)id;
+    c->np = 1;
+    c->hps = 1;
+    c->P[0] = P;
+    c->mf = (k[5] ? k[5] : 1u) << 5;                     /* MFRQ << 16 (at least 1), >> 11 */
+    c->fbm = 125000;                                     /* mdkit's fixed modulator index 0x7a1200, >> 6 */
+    c->dm[0] = (int32_t)k[4] << 2;                       /* MOD << 16 */
+    c->kb[0] = dv_efm_kb(dv_efm_rate(k[1], 70));         /* DEC */
+    c->kb[1] = dv_efm_kb(dv_efm_rate(k[6], 82));         /* MDEC */
+    c->kb[4] = dv_kb(1500);                              /* the choke */
+    c->q0[0] = DV_EFM_63;
+    c->q0[1] = DV_EFM_1;
+    switch (id) {
+    case DV_EFM_BD:                                      /* its own laws (mdkit: double precision) */
+        c->fbm = k[7] << 10;                             /* MFB / 128 of a cycle */
+        c->kb[0] = dv_efm_kb(66657u - k[1] * 3034u / 10u);   /* 0.009469 x 2^(-DEC / 13.5) */
+        c->kb[2] = dv_efm_kb(66672u - k[3] * 3251u / 10u);   /* RDEC / 12.6 */
+        c->kb[1] = dv_efm_kb(66676u - k[6] * 3556u / 10u);   /* MDEC / 11.52 */
+        c->q0[2] = ((int32_t)k[2] - 16) << 23;           /* the ramp: (RAMP - 16) / 128 */
+        c->ph0 = 4000u << 17;
+        dv_efm_hp(c->hp, 0x7FD14Fu);                     /* (Felucca's: DC out, 10 Hz) */
+        break;
+    case DV_EFM_SD:
+        c->kb[3] = dv_efm_kb(dv_efm_rate(k[3], 50));     /* NDEC */
+        c->q0[3] = DV_EFM_1;
+        c->ga = (int32_t)k[2] << 7;                      /* NOIS / 256 */
+        dv_efm_hp(c->nh, 0x44AA20u);
+        dv_efm_hp(c->hp, 0x7FFFFFu - (k[7] << 15));      /* HPF */
+        c->ph0 = 500u << 17;
+        break;
+    case DV_EFM_XT:
+        c->kb[2] = dv_efm_kb(dv_efm_rate(k[3], 75));     /* RDEC */
+        c->q0[2] = ((int32_t)k[2] - 16) << 23;
+        c->q0[0] = 0x400000 << 7;                        /* 0.5 */
+        dv_efm_hp(c->hp, 0x7DE290u);
+        c->ph0 = k[7] << 23;                             /* CLIC */
+        break;
+    case DV_EFM_CP:
+        c->mf = (k[5] ? k[5] : 1u) << 3;                 /* MFRQ << 14 */
+        c->k15[0] = dv_efm_k15(dv_efm_L(70u + ((k[3] * 128u * 40u) >> 12)));   /* CDEC */
+        c->k15[1] = dv_efm_k15(dv_efm_rate(k[1], 70));   /* DEC (the last clap's first block) */
+        c->teeth = (uint8_t)(k[2] / 8u);                 /* CLPS */
+        dv_efm_hp(c->hp, 0x7FFFFFu - (k[7] << 15));
+        break;
+    case DV_EFM_RS:
+        c->np = 2;
+        c->mf = 3072;                                    /* 0x600000 >> 11 */
+        c->dm[0] = (int32_t)k[2];                        /* MOD << 14 */
+        c->P[1] = DV_P16(p16 + v[9]) >> 9;               /* SPTC */
+        c->dm[1] = (int32_t)(k[7] ? k[7] : 1u) << 2;     /* SMOD << 16 (at least 1) */
+        c->kb[3] = dv_efm_kb(dv_efm_rate(k[6], 70));     /* SDEC */
+        c->q0[3] = DV_EFM_63;
+        c->ga = (int32_t)k[4] << 8;                      /* SNAR / 128 */
+        dv_efm_hp(c->hp, 0x7FFFFFu - (k[3] << 15));      /* HPF */
+        c->ph0 = 1u << 30;
+        break;
+    case DV_EFM_CB:
+        c->np = 2;
+        c->P[1] = P * 379u >> 8;
+        c->fbm = 0;
+        c->fbc = k[3] * 384u;                            /* FB x 24576 >> 6 */
+        c->dm[0] = c->dm[1] = (int32_t)k[4] << 1;        /* MOD << 15 */
+        c->kb[3] = dv_efm_kb(dv_efm_L(100u + ((k[1] * 128u * 38u) >> 12)));   /* the fast one, by DEC */
+        c->q0[0] = c->q0[3] = 0x5A8279 << 7;             /* 0.707 */
+        c->ga = 32766 - (int32_t)k[2] * 210;             /* SNAP: the fast envelope's share */
+        c->gb = (int32_t)k[2] * 210;
+        dv_efm_hp(c->hp, 0x7FD14Fu);                     /* (Felucca's: DC out, 10 Hz) */
+        break;
+    case DV_EFM_HH:
+        c->fbm = 0;
+        c->fbc = k[7] << 10;                             /* FB << 16 >> 6 */
+        c->trem = (uint32_t)v[9] << 9;                   /* TFRQ */
+        c->ga = (int32_t)k[2] << 7;                      /* TREM / 256 .. */
+        c->gb = 32767 - c->ga;                           /* .. around 1 - TREM / 256 */
+        dv_efm_hp(c->hp, 0xF4240u);
+        break;
+    default:                                             /* CY */
+        c->np = 4;
+        c->P[1] = P * 361u >> 8;
+        c->P[2] = P * 461u >> 8;
+        c->P[3] = P * 691u >> 8;
+        c->mf = (k[5] + 8u) << 5;                        /* the modulator at (MFRQ + 8) / 16 */
+        c->fbm = 0;
+        c->fbc = k[2] * 408u;                            /* FB x 102, index units */
+        c->dm[0] = 0;
+        c->pm = (k[4] * 384u + 3072u) * 4u;              /* MOD */
+        c->kb[1] = dv_efm_kb(dv_efm_L(350u + ((k[6] * 128u * 40u) >> 12)));   /* MDEC */
+        dv_efm_hp(c->hp, dv_efm_tune_hp(0x7DFFFEu - k[3] * 23808u, p16 - K->p16));   /* HPF (TUNE moves it), twice */
+        c->hps = 2;
+        break;
+    }
+    if (c->np > 2u)
+        c->dm[1] = c->dm[0];
+}
+
 /* a model kit's voice: the same runs, the kit's numbers (DV_KIT). TUNE TONE DECAY extra (SNAP) and the accent move
  * them as they move Felucca's own (64: the kit's design) */
 static void dv_setup_kit(dv_coef_t *c, const dv_param_t *p)
@@ -628,6 +891,9 @@ static void dv_setup_kit(dv_coef_t *c, const dv_param_t *p)
         c->g[0] = v[1];
         c->g[1] = dv_at(v[2], tn);
         dv_drive(&c->g[2], &c->g[3], v[3] * ((int32_t)x + 64) / 128 * (512 + acc) / 512);
+        break;
+    case DVT_EFM:
+        dv_setup_efm(c, K, p16, d, tn, x);
         break;
     default:                                             /* DVT_BELL */
         c->inc[1] = DV_P16(p16 + v[0]);
@@ -889,6 +1155,147 @@ static __attribute__((noinline)) void dv_metal_mix(const dv_coef_t *c, dv_voice_
         y[i] = (m[i] * gm + DV_NOISE(v) * gn) >> 15;
 }
 
+/* one FM pair of an EFM voice into y (added): the modulator (its phase st[0], self-PM fbm) under the mod envelope
+ * (r[2], r[3]: Q20 and its step) moves the carrier (st[1], self-PM fbc) by frequency (dm) or phase (pm), the pitch
+ * x (1 + 8 ramp) (r[4], r[5]), under the amplitude (r[0], r[1]) */
+static __attribute__((noinline)) void dv_efm_pair(const dv_efm_c *c, uint32_t *st, uint32_t P, int32_t dm,
+                                                  const int32_t *r, int32_t *y, uint32_t n)
+{
+    uint32_t i, phm = st[0], phc = st[1], mf = c->mf, fbm = c->fbm, fbc = c->fbc, pm = c->pm;
+    int32_t sm = (int16_t)(st[2] >> 16), sc = (int16_t)st[2], a = r[0], m = r[2], rp = r[4];
+    for (i = 0; i < n; i++) {
+        uint32_t Pt = P + (uint32_t)((((int32_t)(P >> 4)) * (rp >> 8)) >> 5);   /* x (1 + 8 ramp) */
+        int32_t q;
+        sm = sine_i(phm + (uint32_t)sm * fbm);
+        phm += Pt * mf;
+        q = (sm * (m >> 5)) >> 15;
+        sc = sine_i(phc + (uint32_t)sc * fbc + (uint32_t)q * pm);
+        phc += (Pt << 9) + (uint32_t)(q * (int32_t)((Pt * (uint32_t)dm) >> 12));
+        y[i] += (sc * (a >> 5)) >> 15;
+        a += r[1];
+        m += r[3];
+        rp += r[5];
+    }
+    st[0] = phm, st[1] = phc, st[2] = ((uint32_t)sm << 16) | (uint16_t)sc;
+}
+
+/* mdkit's one-pole high-pass (dv_efm_hp) over y, its state h (x1; y1 in Q23: a 10 Hz corner leaves no offset) */
+static inline void dv_efm_hpf(const int32_t *hp, int32_t *h, int32_t *y, uint32_t n)
+{
+    uint32_t i;
+    int32_t x1 = h[0], y1 = h[1];
+    for (i = 0; i < n; i++) {
+        int32_t x = y[i];
+        y1 = clamp((int32_t)((((int64_t)hp[1] * (x - x1)) >> 15) + (((int64_t)hp[0] * y1) >> 23)), -(32767 << 8),
+                   32767 << 8);
+        x1 = x;
+        y[i] = y1 >> 8;
+    }
+    h[0] = x1, h[1] = y1;
+}
+
+/* an EFM voice's block (dv_efm_c, the voices above dv_setup_efm) */
+static __attribute__((noinline)) void dv_efm_run(const dv_coef_t *cc, dv_voice_t *vv, int32_t *y, uint32_t n)
+{
+    const dv_efm_c *c = &cc->efm;
+    dv_efm_v *v = &vv->efm;
+    int32_t r[6], t, dt, i, claps = c->id == DV_EFM_CP && vv->n;
+    uint32_t p;
+    dv_slow(&v->q[0], vv->choke ? c->kb[4] : c->kb[0], &r[0], &r[1]);
+    dv_slow(&v->q[1], c->kb[1], &r[2], &r[3]);
+    dv_slow(&v->q[2], c->kb[2], &r[4], &r[5]);
+    dv_slow(&v->q[3], vv->choke ? c->kb[4] : c->kb[3], &t, &dt);
+    if (c->id == DV_EFM_RS)                              /* no mod envelope */
+        r[2] = 1 << 20, r[3] = 0;
+    if (claps)                                           /* the claps: their own envelope, below */
+        r[0] = 1 << 20, r[1] = 0;
+    if (c->id == DV_EFM_HH) {                            /* 2 x the envelope, at most 1 */
+        int32_t a0 = r[0] * 2, a1 = (r[0] + r[1] * (int32_t)CTL) * 2;
+        a0 = a0 > (1 << 20) ? 1 << 20 : a0;
+        a1 = a1 > (1 << 20) ? 1 << 20 : a1;
+        r[0] = a0, r[1] = (a1 - a0) >> CTL_LOG2;
+    }
+    if (c->id == DV_EFM_CB) {                            /* the two envelopes, SNAP's share of the fast one; x 1/2 */
+        r[0] = ((r[0] >> 5) * c->ga + (t >> 5) * c->gb) >> 11;
+        r[1] = ((r[1] >> 5) * c->ga + (dt >> 5) * c->gb) >> 11;
+    }
+    if (c->id == DV_EFM_CY)                              /* x 1/4 */
+        r[0] >>= 2, r[1] >>= 2;
+    for (i = 0; i < (int32_t)n; i++)
+        y[i] = 0;
+    dv_efm_pair(c, v->op[0], c->P[0], c->dm[0], r, y, n);
+    if (c->id == DV_EFM_RS) {                            /* the snare pair under its own envelope, x SNAR */
+        r[0] = ((t >> 5) * c->ga) >> 10;
+        r[1] = ((dt >> 5) * c->ga) >> 10;
+    }
+    for (p = 1; p < c->np; p++)
+        dv_efm_pair(c, v->op[p], c->P[p], c->dm[1], r, y, n);
+    if (c->id == DV_EFM_SD) {                            /* + the noise, high-passed, under its envelope x NOIS */
+        uint32_t na = v->na, nb = v->nb;
+        int32_t nx = v->nx, ny = v->ny;
+        for (i = 0; i < (int32_t)n; i++) {
+            uint32_t nn = na + nb;
+            int32_t x = (int32_t)nn >> 16;
+            na = nb, nb = nn;
+            ny = clamp((int32_t)((((int64_t)c->nh[1] * (x - nx)) >> 15) + (((int64_t)c->nh[0] * ny) >> 23)),
+                       -(32767 << 8), 32767 << 8);
+            nx = x;
+            y[i] += ((((ny >> 8) * (t >> 5)) >> 15) * c->ga) >> 15;
+            t += dt;
+        }
+        v->na = na, v->nb = nb, v->nx = nx, v->ny = ny;
+    } else if (c->id == DV_EFM_HH) {                     /* the tremolo */
+        uint32_t ph = v->tph;
+        for (i = 0; i < (int32_t)n; i++) {
+            y[i] = (y[i] * (((sine_i(ph) * c->ga) >> 15) + c->gb)) >> 15;
+            ph += c->trem;
+        }
+        v->tph = ph;
+    } else if (claps) {                                  /* re-struck at 0.63 when under 0.05, while claps remain */
+        uint32_t e = v->ce, k = (uint32_t)(vv->cnt ? c->k15[0] : c->k15[1]);
+        for (i = 0; i < (int32_t)n; i++) {
+            y[i] = (y[i] * (int32_t)(e >> 1)) >> 15;
+            e = (e * k) >> 15;
+            if (vv->cnt && e < 3277u) {
+                e = 41350u;
+                if (!--vv->cnt)
+                    k = (uint32_t)c->k15[1];
+            }
+        }
+        v->ce = e;
+        if (!vv->cnt) {                                  /* the last: on as the amplitude envelope */
+            vv->n = 0;
+            v->q[0] = (int32_t)(e << 14);
+        }
+    }
+    for (p = 0; p < c->hps; p++)
+        dv_efm_hpf(c->hp, v->hs + 2 * p, y, n);
+    vv->live = v->q[0] > DV_QUIET || v->q[3] > DV_QUIET || claps;
+}
+
+/* an EFM voice from rest (per hit: out of line, not in drum_render's loops) */
+static __attribute__((noinline)) void dv_efm_strike(const dv_coef_t *cc, dv_voice_t *vv)
+{
+    const dv_efm_c *c = &cc->efm;
+    dv_efm_v *v = &vv->efm;
+    uint32_t p;
+    for (p = 0; p < 4u; p++) {
+        v->op[p][0] = v->op[p][1] = c->ph0;
+        v->op[p][2] = 0;
+    }
+    for (p = 0; p < 4u; p++)
+        v->q[p] = c->q0[p];
+    v->na = 0x789ABCu << 8;                              /* mdkit's seed */
+    v->nb = 0;
+    v->tph = 1u << 30;
+    if (c->id == DV_EFM_CP) {
+        v->ce = 41350u;                                  /* 0.631, Q16 */
+        vv->cnt = c->teeth;
+        vv->n = c->teeth != 0;
+        v->q[0] = c->teeth ? 0 : DV_EFM_63;
+    }
+}
+
 /* ------------------------------------------------------------------- the API --- */
 static void dv_init(dv_voice_t *v, uint32_t type)
 {
@@ -907,6 +1314,10 @@ static void dv_strike(const dv_coef_t *c, dv_voice_t *v)
 {
     dv_init(v, c->type);
     v->live = 1;
+    if (c->type == DVT_EFM) {
+        dv_efm_strike(c, v);
+        return;
+    }
     v->rng = DV_SEED + c->type;
     v->e[0] = v->e[1] = v->e[2] = 65536u;
     v->q[0] = 1 << 30;
@@ -983,6 +1394,9 @@ static void dv_run(const dv_coef_t *c, dv_voice_t *v, const int32_t *metal, int3
         break;
     case DVT_BELL:
         dv_bell_run(c, v, y, n);
+        break;
+    case DVT_EFM:
+        dv_efm_run(c, v, y, n);
         break;
     default:
         dv_cym_run(c, v, metal, y, n);
