@@ -16,6 +16,10 @@ What Felucca-Sog adds:
   instead of a generic soft clip. With POLV, ANALOG's **DRV** drives into the filter itself: more DRV, more grit.
 - **CHEB**, an INSERT type: DRIVE, ORDER (which harmonic: 2nd .. 7th, swept smoothly), LEVEL; MIX brings the
   fundamental back.
+- **The big view** (after ChoralRoot FM-1): turn a knob and what it changes fills the screen while it moves, the value
+  in 96 px figures, its name under it, a bar of where it sits in its range, the track and engine on top. Hold a step
+  and turn a knob (a parameter lock): the lock, LOCK and the step on top in the accent colour. Turn PRESETS: the
+  sound's number big, its name under it.
 
 What Felucca-Sog removes: the SAMPLE, SLICE, GRAIN and PHYS engines, the built-in instrument samples and the user
 sample slots (about 157 KB of flash and 44 KB of RAM for what comes next). A saved track that used one of them loads as

@@ -664,6 +664,8 @@ static void state(void)                          /* a playing song with steps on
     seq_fill = 0;                                /* (1.5.5: GLO's FILL, held in layer_glo_fill only; */
     eu.on = 0;                                   /* SEQ TOOLS' EUCLID, open in layer_seq_euclid*) */
     if (large_on) ui_prefs |= PREF_LARGE;
+    big.kind = BIG_NONE;                         /* (Felucca-Sog: no big view left from the screen before; off but in */
+    big_on = 0;                                  /* its own screens: the page sweep turns knobs and checks the cards) */
     song.playing = 1;
     song.g[G_BPM] = 124;
     clk_pos = 0; clk_step = 8; cin_total = cin_left = 0;   /* the bar's 3rd beat: the header's metronome at rest */
@@ -772,7 +774,8 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_DETAIL, S_DETAIL_PLAYING, S_DETAIL_REST, S_DETAIL_DRUM, S_ROLL_MARKS, S_DRUM_MARKS, S_HELP_DETAIL,
        S_DETAIL_COND, S_DETAIL_FILL, S_AUTO_COND, S_GLO_FILL, S_SEQ_EUCLID, S_SEQ_EUCLID_DRUM, S_SEQ_EUCLID_64,
        S_MENU_SELECT, S_PROJECT_ERASE, S_CONFIRM_ERASE_PROJ, S_TOOLS_CLEAN, S_CONFIRM_CLEAN,
-       S_MENU_MIDI_TRACK, S_MENU_MIDI_TCH_UNUSED, S_MENU_MIDI_AUTO, S_HOME_TRACKS_MIDI, S_MIXER_MIDI, S_EDIT_PHASE_FOLD, S_COUNT };
+       S_MENU_MIDI_TRACK, S_MENU_MIDI_TCH_UNUSED, S_MENU_MIDI_AUTO, S_HOME_TRACKS_MIDI, S_MIXER_MIDI, S_EDIT_PHASE_FOLD,
+       S_BIG_VALUE, S_BIG_WORD, S_BIG_BIP, S_BIG_LOCK, S_BIG_SOUND, S_COUNT };   /* (Felucca-Sog: the big view, ui_big.c) */
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "presets", "presets_nofav", "user",
     "phrases", "project", "tools", "song_empty", "song", "step", "auto_steps", "auto_add_chance", "automation", "drum",
     "drum_hand", "drum_cym", "mixer", "mixer_from_home", "mixer_pan", "env", "env_dest", "lfo", "mod", "fx", "slicer", "dly", "scl", "chord", "chord_wide", "chord_off", "chord_kit", "arp",
@@ -803,7 +806,8 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "detail_cond", "detail_fill", "auto_cond", "layer_glo_fill", "layer_seq_euclid", "layer_seq_euclid_drum",
     "layer_seq_euclid_64",
     "menu_select", "project_erase", "confirm_erase_project", "tools_clean", "confirm_clean",
-    "menu_midi_track", "menu_midi_channels_unused", "menu_midi_auto_select", "home_tracks_midi", "mixer_midi", "edit_phase_fold"};
+    "menu_midi_track", "menu_midi_channels_unused", "menu_midi_auto_select", "home_tracks_midi", "mixer_midi", "edit_phase_fold",
+     "big_value", "big_word", "big_bip", "big_lock", "big_sound"};
 
 /* the STEP page's piano roll (ui_graph.c graph_roll) on track 1, stopped unless said: an empty pattern; ACID in
  * A minor; POLY chords (Am7 F C G, tied); a line with ties, slides and accents in C major; LEN 32 on its second
@@ -1110,6 +1114,13 @@ static void setup(int s)
         go_title("ENV"); ui.hot_col = 0; ui.hot_t = 30; break;
     case S_ENV_DEST_SYNC: TSEL->p[P_ESYNC] = 1; go_title("ENV DEST"); break;
     case S_FILTER: TSEL->p[P_FTYPE] = 1; go_title("FILTER"); break;   /* 1.5: ANALOG's TYPE CUT RES KTR */
+    /* Felucca-Sog's big view (ui_big.c): a knob's value, a word value, a bipolar one, a step's lock, a sound */
+    case S_BIG_VALUE: big_on = 1; go_title("EDIT 2"); TSEL->p[P_E4] = 117; big_value(TSEL, track_desc(TSEL, P_E4), &TSEL->p[P_E4]); ui.hot_t = 30; break;
+    case S_BIG_WORD: big_on = 1; go_title("FILTER"); TSEL->p[P_FTYPE] = 3; big_value(TSEL, track_desc(TSEL, P_FTYPE), &TSEL->p[P_FTYPE]);
+        ui.hot_t = 30; break;
+    case S_BIG_BIP: big_on = 1; TSEL->p[P_PAN] = -40; big_value(TSEL, &TP[P_PAN], &TSEL->p[P_PAN]); ui.hot_t = 30; break;
+    case S_BIG_LOCK: big_on = 1; motion_set_lock(TSEL, 4, P_E4, 23); big_lock(P_E4, 1ull << 4); ui.hot_t = 30; break;
+    case S_BIG_SOUND: big_on = 1; apply_preset_to(TSEL, 4); big_sound(); ui.hot_t = 30; break;
     case S_LFO: go_title("LFO"); break;
     case S_MOD: TSEL->p[P_M1SRC] = 1; TSEL->p[P_M1DST] = 2; TSEL->p[P_M1AMT] = 40; TSEL->p[P_M2SRC] = 6;
         TSEL->p[P_M2DST] = 14; TSEL->p[P_M2AMT] = -64; mod_ui_slot = 1; go_title("MOD"); break;

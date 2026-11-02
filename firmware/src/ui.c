@@ -10,6 +10,7 @@ static void project_load(uint32_t slot);
 static int project_used(uint32_t slot);
 static uint32_t chain_prepare(void);
 static int up_used(uint32_t k);              /* user presets: upreset.c */
+static void big_sound(void);                 /* Felucca-Sog's big view (ui_big.c) */
 static int up_load(uint32_t k);
 static uint32_t up_count(void);
 static uint32_t up_nth(uint32_t n);
@@ -1731,6 +1732,8 @@ static void preset_step(int32_t direction)
     if (!total) { ui_message(list_mode() == 1u ? "NO FAVORITES" : "NO SOUNDS IN LIST"); return; }
     preset_go(cur >= total ? (direction > 0 ? 0 : total - 1) :
               (cur + (direction > 0 ? 1u : total - 1u)) % total);
+    big_sound();                                      /* (Felucca-Sog: the sound, big, while PRESETS turns) */
+    ui.hot_t = 40;
 }
 
 /* Seven display rows. FAV and a category use a bounded window, not a repeating carousel.
@@ -1777,6 +1780,7 @@ static void track_select(uint32_t i)
 static int slice_page_ok(void) { return 0; }
 static int slice_page_on(void) { return 0; }
 #include "ui_events.c"                            /* SEQ > AUTOMATION: locks, events, CHANCE, RATCH as a list (an action page) */
+#include "ui_big.c"                               /* Felucca-Sog: the big view of what a knob changes (a value, a lock, a sound) */
 #include "midi_learn.c"                           /* MIDI LEARN (1.5): GLO + D4, a knob, a CC */
 
 /* ---------------------------------------------------- action pages --- */

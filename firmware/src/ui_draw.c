@@ -1618,6 +1618,14 @@ static void ui_draw_page(uint32_t counting)
         page_entered();
     }
     cursor_fix();
+    if (big_showing()) {                                /* Felucca-Sog: what a knob changes, the whole screen (ui_big.c) */
+        big_draw();
+        if (!--ui.hot_t) {
+            big.kind = BIG_NONE;
+            ui.force = 1;                               /* the page again, whole */
+        }
+        return;
+    }
     if (ui.force)
         draw_frame();
     felucca_dbg.stage = 3;

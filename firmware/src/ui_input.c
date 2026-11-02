@@ -1763,6 +1763,8 @@ static void ui_input(void)
             ui.pg_down &= (uint16_t)~(1u << panel.btn[B_LFO]);
         if ((held = lock_held()) != 0u) {               /* a step held on STEP: KNOB k locks (parameter locks) */
             lock_turn(k, s, held);
+            if (lock_id(k) != 0xFFu)
+                big_lock(lock_id(k), held);             /* (Felucca-Sog: the big view, ui_big.c) */
             ui.hot_col = (uint8_t)k;
             ui.hot_t = 40;
             continue;
@@ -1782,11 +1784,16 @@ static void ui_input(void)
         if (ui.home) {
             int16_t *vp;
             const param_desc_t *d = home_param(k, &vp);
+            big_value(home_trk(k), d, vp);              /* (Felucca-Sog: the big view, ui_big.c) */
             *vp = (int16_t)param_turn(d, *vp, accel(EN_K1 + k, s, d->fmt == F_ENUM ? 0 : d->max - d->min));
             motion_capture(home_trk(k), (uint32_t)(vp - home_trk(k)->p), *vp);   /* (LEVELS: that track's, as MIXER) */
             ml_knob(home_trk(k), (uint32_t)(vp - home_trk(k)->p));
         } else {
-            edit_param(k, s);
+            int16_t *bv;
+            const param_desc_t *bd = page_desc(pg, k, &bv);   /* (Felucca-Sog: the big view, ui_big.c; 0: no such */
+            edit_param(k, s);                           /* card, a step page, TRACKS) */
+            if (bd && pg->graph != GR_BROWSE)
+                big_value(TSEL, bd, bv);
         }
     }
     ui_notices();

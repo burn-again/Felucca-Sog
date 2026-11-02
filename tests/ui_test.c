@@ -168,6 +168,8 @@ static int check(const char *what, int ok)
 static void ui_power_on(void)
 {
     uint32_t i;
+    big_on = 0;                                         /* (Felucca-Sog's big view: off for the page checks below, which */
+    big.kind = BIG_NONE;                                /* look at the page under a turned knob; test_big_view has it on) */
     memset(trk, 0, sizeof trk);
     memset(&song, 0, sizeof song);
     memset(midi_lit_ms, 0, sizeof midi_lit_ms); midi_seen = 0;   /* (1.5.5: no MIDI IN light) */
@@ -6582,6 +6584,50 @@ static int test_layer_knob_race(void)
 static void tl_note(step_t *s, uint32_t n) { memset(s, 0, sizeof *s); s->time = ST_NOTE; s->n = 1; s->note[0] = (uint8_t)n; s->vel = 96; }
 static void tl_tie(step_t *s) { memset(s, 0, sizeof *s); s->time = ST_TIE; }
 /* the selected track: LEN 8, C4 tied, E4, G4 (steps 1 2, 4, 6), a note past LEN (21), a lock on step 4 */
+/* Felucca-Sog's big view (ui_big.c): a page's knob shows its parameter big, live, then the page again; HOME's knob too;
+ * PRESETS the sound; a lock its step's value; not over a layer or the MENU */
+static int test_big_view(void)
+{
+    int bad = 0, ok;
+    uint32_t i;
+    ui_power_on();
+    big_on = 1;
+    go_title("EDIT 2");
+    turn(EN_K1, 1);
+    frame();
+    ok = big.kind == BIG_VALUE && big.vp == &TSEL->p[cur_page()->id[0]] && big_showing();
+    turn(EN_K1, 3);
+    frame();
+    ok &= big.vp == &TSEL->p[cur_page()->id[0]] && big_showing();          /* (live: the same pointer, the new value) */
+    for (i = 0; i < 100u && big_showing(); i++)
+        frame();
+    ok &= !big_showing() && big.kind == BIG_NONE && ui.force;            /* (the page asked for, whole) */
+    frame();
+    ok &= !ui.force;                                                     /* .. and drawn */
+    bad += check("big view: a page's knob shows its parameter, live, then the page again", ok);
+    go_home();
+    turn(EN_K1, 1);
+    frame();
+    bad += check("  HOME's knob: its parameter", big.kind == BIG_VALUE && big_showing() && big.d != 0);
+    for (i = 0; i < 100u && big_showing(); i++)
+        frame();
+    go_page(GR_BROWSE);
+    turn(EN_K1, 1);
+    frame();
+    bad += check("  PRESETS: the sound", big.kind == BIG_SOUND && big_showing());
+    for (i = 0; i < 100u && big_showing(); i++)
+        frame();
+    motion_set_lock(TSEL, 6, P_E4, 23);
+    big_lock(P_E4, 1ull << 6);
+    ui.hot_t = 40;
+    frame();
+    bad += check("  a lock: its step and parameter", big.kind == BIG_LOCK && big.step == 6u && big.id == P_E4 && big_showing());
+    big_on = 0;
+    big.kind = BIG_NONE;
+    ui.hot_t = 0;
+    return bad;
+}
+
 static void tl_melody(void)
 {
     uint32_t i;
@@ -9769,6 +9815,7 @@ int main(void)
     bad += test_fx_map_columns();
     bad += test_help();
     bad += test_no_flash();
+    bad += test_big_view();
 #if FELUCCA_FM4
     bad += test_fm_charts();                        /* (DIGITAL's charts: built with FELUCCA_FM4=1 only) */
 #else
