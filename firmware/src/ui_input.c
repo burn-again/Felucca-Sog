@@ -1374,29 +1374,6 @@ static int page_tap(uint32_t b)
     return 0;
 }
 
-/* a track whose sound's sample is missing (engines.c snd_missing: an empty user slot, a built-in set this build lacks;
- * it plays a sine): the no-file icon and NO SAMPLE (ui.c MSG_NO_SAMPLE). Once per track and source: at power-on, a sound
- * or project load, SRC / SET turned, a slot erased; again after another source or a project load. One a frame; after
- * a message already showing (LOADED) as the second message. Not on notes: nothing in the audio path */
-static void sample_notice(void)
-{
-    uint32_t k, code;
-    for (k = 0; k < NTRK; k++) {
-        code = 0;
-        if (!snd_missing(&trk[k], &code)) {
-            snd_said[k] = 0;
-            continue;
-        }
-        if (snd_said[k] == code)
-            continue;
-        snd_said[k] = (uint8_t)code;
-        if (ui.msg_t)
-            str_cpy(ui.msg2, MSG_NO_SAMPLE, sizeof ui.msg2);
-        else
-            ui_message(MSG_NO_SAMPLE);
-        return;
-    }
-}
 
 /* 1.5.5 (#208): MIDI IN notes since the last frame (seq.c midi_seen): their tracks light (midi_lit), and with MENU > MIDI >
  * AUTO SELECT ON a track that is not selected becomes the selected one, but not while the selected track has had notes
@@ -1452,7 +1429,6 @@ static int midi_follow(void)
 static void ui_notices(void)
 {
     static uint32_t midi_t, midi_last;
-    sample_notice();
     ml_poll();                                          /* (MIDI LEARN: a CC came for the picked parameter) */
     if (motion_full) { motion_full = 0; ui_message("AUTOMATION FULL"); }
     if (midi_follow())                                  /* (AUTO SELECT took the track: no "MIDI IN -> Tn") */
@@ -1480,6 +1456,9 @@ static void ui_input(void)
     midi_take();                                        /* (MIDI IN notes: lights, SCREEN WAKE, AUTO SELECT's) */
     midi_pc_poll();                                     /* MIDI Program Change (before fm6_poll: a bank voice) */
     fm6_poll();                                         /* FM6: PTCH turned -> its patch */
+    for (k = 0; k < NTRK; k++)                          /* SAMPLE GRAIN PHYS SLICE (gone): ANALOG (ui.c gone_track) */
+        if (eng_gone(trk[k].eng_req))
+            gone_track(&trk[k]);
 #if !FELUCCA_FM4
     for (k = 0; k < NTRK; k++)                          /* a DIGITAL sound any other way (the paths convert it */
         if (trk[k].eng_req == ENGI_DIGITAL)             /* already): FM6 (fm4_convert.c) */

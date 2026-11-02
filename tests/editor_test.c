@@ -51,7 +51,7 @@ static void panel_setup(void) {}
 static uint32_t flash_ok = 1;
 static void audio_silence(void) {}
 static void fl_inval(uint32_t off, uint32_t n) { (void)off; (void)n; }
-static uint8_t *host_flash_ptr(uint32_t off) { return &host_samples[0][0] + off - SMP_USER_BASE; }
+static uint8_t *host_flash_ptr(uint32_t off) { return &host_samples[0][0] + off % sizeof host_samples; }   /* (RAM flash) */
 static int fl_erase4k(uint32_t off, uint32_t *took)
 {
     memset(host_flash_ptr(off), 0xFF, 4096); *took = 0; host_erases++; return 0;
@@ -79,7 +79,7 @@ static void reset(void)
     memset(&ed_w, 0, sizeof ed_w); memset(&ui, 0, sizeof ui);
     memset(&favorites, 0, sizeof favorites); memset(&settings, 0, sizeof settings); settings_init();
     memset(proj_slot, 0, sizeof proj_slot); memset(up_bank, 0, sizeof up_bank);
-    memset(&um, 0, sizeof um); memset(usr_nz, 0, sizeof usr_nz);
+    memset(&um, 0, sizeof um);
     host_progress = 1; host_erases = host_writes = host_wire_n = 0;
     transport_req = panic_req = 0; sx_ready = sx_collect = sx_busy = 0;
     so_r = so_w = mi_r = mi_w = 0; midi_in_overflow = 0; usb.config = 1;
@@ -391,46 +391,20 @@ static int steps(void)
     return bad;
 }
 
+/* Felucca-Sog: no engine plays samples, the user sample slots are gone: SMP_INFO reports none, BEGIN / ERASE / WRITE /
+ * END refuse (rc 1) and nothing reaches the flash; the transport plays on */
 static int samples(void)
 {
-    uint8_t a[640] = {0}, data[257], short_group[] = {0, 0, 4, 0, 1};
-    uint32_t n, i;
+    uint8_t a[640] = {0};
     int bad = 0;
-    smp_user_hdr_t h;
     reset(); memset(host_samples, 0, sizeof host_samples);
-    for (i = 0; i < sizeof data; i++) data[i] = (uint8_t)(i * 37u);
-    song.playing = 1; host_progress = 0;
-    bad += check("sample erase waits for STOP and refuses a stalled audio ISR",
-                 request(ED_SMP_BEGIN, a, 1) == 8u && host_wire[6] != 0 && !host_erases && song.playing);
-    host_progress = 1;
-    bad += check("sample erase stops transport before touching flash",
-                 request(ED_SMP_BEGIN, a, 1) == 8u && !host_wire[6] && host_erases == 1 && !song.playing);
-    a[0] = 0; a[1] = 0; a[2] = 4; a[3] = 0;
-    n = pack7(data, 257, a + 4) + 4u;
-    bad += check("257 decoded sample bytes are rejected without a truncated write",
-                 request(ED_SMP_WRITE, a, n) == 11u && host_wire[9] == 1 && !host_writes);
-    bad += check("a dangling packed-data mask is rejected",
-                 request(ED_SMP_WRITE, short_group, sizeof short_group) == 11u && host_wire[9] == 1 && !host_writes);
-    n = pack7(data, 256, a + 4) + 4u;
-    transport_req = 1;
-    bad += check("sample writes cancel a pending PLAY before flash access",
-                 request(ED_SMP_WRITE, a, n) == 11u && !host_wire[9] && transport_req != 1u && host_writes == 1);
-    memset(&h, 0, sizeof h); h.magic = SMP_USER_MAGIC; h.version = 1; h.nz = 1;
-    h.data_len = 256; h.crc = st_crc32(data, 256); h.zone[0].n = 512; h.zone[0].le = 511;
-    h.zone[0].rate = 65536; h.zone[0].hi = 127;
-    a[0] = 0; n = pack7((const uint8_t *)&h, sizeof h, a + 1) + 1u;
-    a[n] = 0; a[n + 1u] = 0;
-    bad += check("an oversized sample header is rejected without programming flash",
-                 request(ED_SMP_END, a, n + 2u) == 8u && host_wire[6] == 1 && host_writes == 1);
-    bad += check("complete sample header and CRC publish a valid slot",
-                 request(ED_SMP_END, a, n) == 8u && !host_wire[6] && usr_nz[0] == 1 && host_writes == 2);
-    bad += check("repeated END of the same published header does not rewrite live zones",
-                 request(ED_SMP_END, a, n) == 8u && !host_wire[6] && host_writes == 2);
-    h.zone[0].rate = 131072;
-    n = pack7((const uint8_t *)&h, sizeof h, a + 1) + 1u;
-    bad += check("END cannot change published sample zones without BEGIN",
-                 request(ED_SMP_END, a, n) == 8u && host_wire[6] == 2 && host_writes == 2 &&
-                 usr_zone[0][0].rate == 65536u);
+    song.playing = 1;
+    bad += check("no sample slots: SMP_INFO reports none", request(ED_SMP_INFO, a, 0) == 8u && host_wire[5] == 0 &&
+                 host_wire[6] == 0);
+    bad += check("  BEGIN, ERASE, WRITE, END refuse; no erase, no write, the transport untouched",
+                 request(ED_SMP_BEGIN, a, 1) == 8u && host_wire[6] == 1 && request(ED_SMP_ERASE, a, 1) == 8u &&
+                 host_wire[6] == 1 && request(ED_SMP_WRITE, a, 8) == 11u && host_wire[9] == 1 &&
+                 request(ED_SMP_END, a, 4) == 8u && host_wire[6] == 1 && !host_erases && !host_writes && song.playing);
     song.playing = 1; host_progress = 0; a[0] = 0; a[1] = 0;
     bad += check("user-preset STORE does not mutate RAM when audio cannot stop",
                  request(ED_UP_STORE, a, 2) == 8u && host_wire[6] == 2 && !up_used(0));

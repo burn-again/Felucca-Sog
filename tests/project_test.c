@@ -377,7 +377,7 @@ int main(void)
             q.t[0].p[P_E0 + i] = E0[i];
             q.t[1].p[P_E0 + i] = E1[i];
             q.t[2].p[P_E0 + i] = OLD_KIT[i];
-            q.t[3].p[P_E0 + i] = (int16_t)(i ? 30 : PM_SYMP);
+            q.t[3].p[P_E0 + i] = (int16_t)(i ? 30 : 3);   /* (PHYS MODEL SYMP: PHYS is gone, the values stay) */
         }
         q.phys = 1;
         for (i = 1; i < NSTEP; i++)                     /* (the other steps rests) */
@@ -404,14 +404,7 @@ int main(void)
         memcpy(&buf, &q2, sizeof q2);
         bad += check("FUN6 after it: imported again, as it is", proj_import(&q, &buf, (int)sizeof q2) &&
                                                                 !memcmp(&q, &q2, sizeof q));
-        q.phys = 0;                                     /* before 1.0: MODEL 2 was DUST */
-        q.t[1].engine = ENGI_PHYS;
-        q.sum = proj_sum(&q);
-        to_v4(&v4, &q);
-        memcpy(&buf, &v4, sizeof v4);
-        ok = proj_import(&q2, &buf, (int)sizeof v4) && q2.phys == PROJ_PHYS && q2.t[1].engine == ENGI_PHYS &&
-             q2.t[1].p[P_E0] == PM_MODAL && q2.t[1].p[P_E6] == 64;
-        bad += check("FUN4 phys 0: PHYS DUST -> MODAL bowed", ok);
+        /* (pre-1.0 PHYS model numbers, phys_legacy: gone with PHYS in Felucca-Sog) */
     }
 
     {   /* the FUN7 name: the reserved tail's last 12 bytes, covered by the hash; zero = no name */

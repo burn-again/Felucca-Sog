@@ -13,9 +13,8 @@
 #define NTRK NPART               /* tracks (the formats and the protocol count these): every track is a part */
 #define NSTEP 64
 #define HALF_FRAMES 128          /* I2S half buffer: 2.9 ms at 44.1 kHz (a key waits 0..1 half, then plays 1 half later) */
-#ifndef FELUCCA_SLICE
-#define FELUCCA_SLICE 1          /* the SLICE engine (eng_slice.c), engine 13; FELUCCA_SLICE=0 builds without it */
-#endif
+#undef FELUCCA_SLICE
+#define FELUCCA_SLICE 0          /* Felucca-Sog: SLICE (engine 13) is gone, as are SAMPLE (4), GRAIN (8) and PHYS (9) */
 #ifndef FELUCCA_FM4
 #define FELUCCA_FM4 0            /* the DIGITAL engine (eng_digital.c, four-operator FM): kept in the tree, not built
                                   * by default; replaced by FM6, its sounds convert (fm4_convert.c) */
@@ -32,7 +31,11 @@
 #define ENGI_DIGITAL 1u          /* reserved without FELUCCA_FM4: never selectable (eng_ok), its sounds load as FM6 */
 #define ENGI_SLICE 13u
 #define ENGI_KOGERENT 14u
-#define NENG_SHOWN (NENGINES - 1u - !FELUCCA_SLICE)   /* the engines one can pick (DIGITAL or, with FELUCCA_FM4=1, COHERE
+#define ENGI_GRAIN 8u
+/* Felucca-Sog: SAMPLE GRAIN PHYS SLICE are gone: their numbers reserved (ENG_FM4_GONE), a stored one loads as ANALOG
+ * (ui.c gone_track, from the main loop: every path that sets an engine ends there) */
+#define eng_gone(e) ((e) == 4u || (e) == 8u || (e) == 9u || (e) == 13u)
+#define NENG_SHOWN (NENGINES - 4u - !FELUCCA_FM4)   /* the engines one can pick (not the four gone; DIGITAL with FELUCCA_FM4=1
                                                      * left out: the EDIT layer has 14 engine keys): PRESETS, the EDIT layer, the editor,
                                                 * in the display order of engines.c ENGINE_ORDER */
 #define UP_SLOTS 32u             /* user presets (upreset.c) */

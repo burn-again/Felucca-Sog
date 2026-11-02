@@ -1274,21 +1274,40 @@ static int param_kept(uint32_t i)
  * (SAMPLE 4, once PERC, is past SMP_NPRESETS: apply_preset_to loads it as DRUM) */
 static uint32_t preset_orig(const engine_t *e, uint32_t k)
 {
-    return e->presets == SMP_PRESET_TABLE && k < SMP_NSETS ? SMP_SET_ORIG[k] : k;
+    (void)e;
+    return k;
 }
 
 /* the presets of engine e that browsing shows before preset k (k = npresets: all of them) */
 static uint32_t preset_rank(const engine_t *e, uint32_t k)
 {
-    uint32_t i, n = 0;
-    if (e->presets != SMP_PRESET_TABLE)
-        return k;
-    for (i = 0; i < k; i++)
-        n += preset_orig(e, i) == i;
-    return n;
+    (void)e;
+    return k;
 }
 
-#define preset_shown(e) (ENGINES[e]->npresets - (ENGINES[e]->presets == SMP_PRESET_TABLE ? SMP_NALIAS : 0u))
+#define preset_shown(e) (ENGINES[e]->npresets)
+
+/* Felucca-Sog: SAMPLE GRAIN PHYS SLICE are gone (core.h eng_gone). A track that holds one (a project, a user preset, the
+ * editor, MIDI program change: every path ends in the main loop, ui_input.c) becomes ANALOG with its first preset's
+ * sound: E1..E8 and the envelope; everything else stays (steps, locks, LEVEL PAN, the sends, the INSERT, ARP, SCL) */
+static void gone_track(track_t *t)
+{
+    const preset_t *pr = &ENG_ANALOG.presets[0];
+    uint32_t i, f = motion_guard();                   /* the audio ISR sees the old sound or the new one */
+    for (i = 0; i < 8u; i++)
+        t->p[P_E0 + i] = pr->e[i];
+    t->p[P_ATK] = pr->env[0];
+    t->p[P_DEC] = pr->env[1];
+    t->p[P_SUS] = pr->env[2];
+    t->p[P_REL] = pr->env[3];
+    t->eng_req = 0;
+    t->preset = 0;
+    t->user = 0;
+    motion_unguard(f);
+    if (t == TSEL)
+        sync_reload = 1;
+    ui.force = 1;
+}
 
 #if !FELUCCA_FM4
 /* DIGITAL (engine 1, retired): t's sound = p, values as DIGITAL has them, converted to FM6 with a patch of its own
@@ -1346,7 +1365,7 @@ static void apply_preset_to(track_t *t, uint32_t pi)
 #endif
     if (t->eng_req % NENGINES == ENGI_SAMPLE && pi == SMP_SET_PERC) {   /* SAMPLE preset 4 was PERC (retired, a stored */
         set_engine_of(t, ENGI_DRUM);                  /* number: the editor's PRESET, a favourite): DRUM's kit */
-        return;                                       /* (core.h drum_from_perc) */
+        return;                                       /* (core.h drum_from_perc; SAMPLE itself is gone: ANALOG) */
     }
     load_begin(t, UNDO_SOUND);
     panic_req |= (uint8_t)(1u << trk_index(t));       /* MONO/POLY may change: release what sounds */
@@ -1754,7 +1773,9 @@ static void track_select(uint32_t i)
     ui.force = 1;
 }
 
-#include "ui_slice.c"                             /* EDIT > SLICES: SLICE's slices by hand (an action page too) */
+/* EDIT > SLICES was SLICE's page (ui_slice.c), gone with SLICE in Felucca-Sog: never shown */
+static int slice_page_ok(void) { return 0; }
+static int slice_page_on(void) { return 0; }
 #include "ui_events.c"                            /* SEQ > AUTOMATION: locks, events, CHANCE, RATCH as a list (an action page) */
 #include "midi_learn.c"                           /* MIDI LEARN (1.5): GLO + D4, a knob, a CC */
 

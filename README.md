@@ -17,6 +17,10 @@ What Felucca-Sog adds:
 - **CHEB**, an INSERT type: DRIVE, ORDER (which harmonic: 2nd .. 7th, swept smoothly), LEVEL; MIX brings the
   fundamental back.
 
+What Felucca-Sog removes: the SAMPLE, SLICE, GRAIN and PHYS engines, the built-in instrument samples and the user
+sample slots (about 157 KB of flash and 44 KB of RAM for what comes next). A saved track that used one of them loads as
+ANALOG's first sound with its steps, mix and effects kept; an old SAMPLE PERC sound still loads as DRUM's kit.
+
 ## Maintenance Notice
 
 What began as a personal experiment grew far beyond my expectations. I’m grateful to everyone who contributed, supported the project, and made music with Felucca.

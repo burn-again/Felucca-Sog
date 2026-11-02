@@ -70,7 +70,7 @@ static const char *const N_IRATE[] = {"689", "919", "1.1k", "1.4k", "1.8k", "2.2
 static const char *const N_MSRC[] = {"OFF", "LFO", "ENV", "VEL", "KEY", "RAND", "MODW", "AT", "EXPR", "S&H", "SLEW"};
 static const char *const N_MDST[] = {"OFF", "PITCH", "CUT", "SHP", "AMP", "PAN", "DIST", "CHO", "DLY", "REV", "RATE",
                                      "VIB", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "DEPTH", "VEL", "TIME"};
-static const char *const N_ENGNAME[] = {"ANALOG", FELUCCA_FM4 ? "DIGITAL" : "-", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN", "PHYS",
+static const char *const N_ENGNAME[] = {"ANALOG", FELUCCA_FM4 ? "DIGITAL" : "-", "PHASE", "LOFI", "-", "VOICE", "TRIO", "WHEEL", "-", "-",   /* (4 8 9 13: gone) */
                                              "DRUM", "NOISE", "FM6", FELUCCA_SLICE ? "SLICE" : "-",
                                              "COHERE",
 };
@@ -253,7 +253,10 @@ static int32_t enum_orig(const param_desc_t *d, int32_t v)
 {
     if (d->names == N_DRUM_KIT)
         return v >= 0 && v < DK_COUNT ? (int32_t)DK_PLAYS[v] : v;
-    return d->names == SMP_ALL_NAMES && v >= 0 && v < SMP_NSETS ? SMP_SET_ORIG[v] : v;
+    if (d->names == N_ENGNAME && v >= 0 && v < (int32_t)NELEM(N_ENGNAME) && N_ENGNAME[v][0] == '-')
+        return 13;                                    /* the reserved engine numbers (Felucca-Sog: 1 4 8 9 13): one "-",
+                                                       * the last (as the editor's aliasOf); the knob steps over the rest */
+    return v;
 }
 
 /* a stored value as the parameter takes it (projects, user presets, motion): inside d's range, and a retired

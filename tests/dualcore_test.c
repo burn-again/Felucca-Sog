@@ -76,8 +76,8 @@ static uint64_t render(const scen_t *sc, int dual, const char *mask)
                 for (i = 0; i < 3u; i++)
                     trk_note_off(&trk[k], base + CH[i]);
         }
-        if (sc->morph && ms == 600u)                /* PHYS: MODEL changed under a sounding note (phys_render) */
-            trk[0].p[P_E0] = (int16_t)((trk[0].p[P_E0] + 1) % PM_COUNT);
+        if (sc->morph && ms == 600u)                /* COHERE: OSC changed under a sounding note (coh_render) */
+            trk[0].p[P_E0] = (int16_t)(2 + (trk[0].p[P_E0] - 1) % 4);
         mix_block(o, CTL);
         for (k = 0; k < NPART; k++)
             if (trk[k].peak > peak[k])
@@ -137,10 +137,10 @@ int main(void)
             sc[n++].morph = 0;
         }
     }
-    sc[n++] = (scen_t){"PHYS FM6 ANALOG DRUM", {ENGI_PHYS, ENGI_FM6, 0, ENGI_DRUM}, {1, 4, 7, 0}, 0};
-    sc[n++] = (scen_t){"GRAIN NOISE VOICE LOFI", {8, 11, 5, 3}, {1, 4, 7, 10}, 0};
+    sc[n++] = (scen_t){"COHERE FM6 ANALOG DRUM", {ENGI_KOGERENT, ENGI_FM6, 0, ENGI_DRUM}, {1, 4, 7, 0}, 0};
+    sc[n++] = (scen_t){"COHERE NOISE VOICE LOFI", {ENGI_KOGERENT, 11, 5, 3}, {2, 4, 7, 10}, 0};
     sc[n++] = (scen_t){"TRIO WHEEL PHASE FM6", {6, 7, 2, ENGI_FM6}, {1, 4, 7, 10}, 0};
-    sc[n++] = (scen_t){"PHYS morph + DRUM GRAIN ANALOG", {ENGI_PHYS, ENGI_DRUM, 8, 0}, {2, 1, 3, 5}, 1};
+    sc[n++] = (scen_t){"COHERE morph + DRUM COHERE ANALOG", {ENGI_KOGERENT, ENGI_DRUM, ENGI_KOGERENT, 0}, {2, 1, 3, 5}, 1};
 #if FELUCCA_SLICE
     sc[n++] = (scen_t){"SAMPLE SLICE GRAIN PHASE", {ENGI_SAMPLE, 13, 8, 2}, {2, 1, 3, 5}, 0};
     sc[n++] = (scen_t){"SLICE FM6 SAMPLE DRUM", {13, ENGI_FM6, ENGI_SAMPLE, ENGI_DRUM}, {0, 2, 3, 4}, 0};

@@ -305,8 +305,7 @@ static void proj_phys(project_t *q)
         proj_trk_t *d = &q->t[k];
         if (d->engine != ENGI_PHYS)
             continue;
-        if (!q->phys)
-            phys_legacy(&d->p[P_E0]);
+        /* (pre-1.0 PHYS model numbers, phys_legacy: PHYS is gone in Felucca-Sog; its DRUM model still converts) */
         if (drum_from_phys(d->engine, &d->p[P_E0])) {
             d->engine = ENGI_DRUM;
             d->preset = 0;
@@ -1126,7 +1125,6 @@ static int project_restore_runtime(const project_t *input)
     sync_reload = 1;
     ui.force = 1;
     ui_message("LOADED");
-    memset(snd_said, 0, sizeof snd_said);               /* a missing sample is said again, after LOADED */
     return 0;
 }
 static void project_load(uint32_t slot)
@@ -1168,11 +1166,6 @@ static void persist_boot(void)                    /* before settings_init / pane
 #if FELUCCA_SLICE
     slc_store_boot();                              /* (the scans read each slot's stored slices) */
 #endif
-    {
-        uint32_t k;
-        for (k = 0; k < SMP_USER_SLOTS; k++)
-            smp_user_scan(k);
-    }
     {
         int n = st_load(OBJ_SETTINGS, &p, sizeof p);
         if (settings_import(&p, n))

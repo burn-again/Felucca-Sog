@@ -592,7 +592,7 @@ static void keys(void)
         }
     }
     bad += drum_keys(&trk[0], 7) != 36;
-    bad += ENGINES[ENGI_DRUM] != &ENG_DRUM || ENGINES[ENGI_PHYS] != &ENG_PHYS || ENG_PHYS.keys != 0;
+    bad += ENGINES[ENGI_DRUM] != &ENG_DRUM;            /* (PHYS, which kept the keyboard, is gone in Felucca-Sog) */
     printf("drum_test: keys: the GM drum map, the first C plays KICK, KICK picks the kick; DRUM is engine "
            "%u, PHYS (%u) keeps the keyboard: %s\n", ENGI_DRUM, ENGI_PHYS, bad ? "FAIL" : "ok");
     fails += bad != 0;

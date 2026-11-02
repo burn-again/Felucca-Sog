@@ -55,11 +55,8 @@ static void uplay(track_t *t, uint32_t e, uint32_t pi, uint32_t base, uint32_t w
     urun(250);                                   /* still ringing at the next switch */
 }
 
-static const uint32_t UE[] = {0 /* ANALOG */, ENGI_SAMPLE, 7 /* WHEEL */, 8 /* GRAIN */, ENGI_PHYS, ENGI_DRUM, ENGI_FM6,
-#if FELUCCA_SLICE
-                              13 /* SLICE */
-#endif
-};
+static const uint32_t UE[] = {0 /* ANALOG */, 7 /* WHEEL */, ENGI_DRUM, ENGI_FM6, ENGI_KOGERENT};   /* (Felucca-Sog: SAMPLE GRAIN
+                                                                                * PHYS SLICE gone; COHERE added: it keeps its state there too) */
 #define UNE (sizeof UE / sizeof UE[0])
 
 static uint64_t useq(const uint32_t *e, uint32_t n, uint32_t pi, uint32_t wait_ms)
